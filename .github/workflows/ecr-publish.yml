@@ -69,7 +69,7 @@ jobs:
           echo "We try creating this even if the repo exists, so errors to that note will not create failures of the workflow."
           aws ecr create-repository \
              --region "${ECR_AWS_REGION}" \
-             --repository-name "${ENVIRONMENT}/${IMAGE_NAME}" \
+             --repository-name "${IMAGE_URI}" \
              --image-tag-mutability MUTABLE \
              --image-scanning-configuration scanOnPush=true  \
              --encryption-configuration encryptionType="AES256" || true
