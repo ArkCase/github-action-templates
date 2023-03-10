@@ -65,6 +65,12 @@ jobs:
 
           # TODO: Support finding the image name from a subfolder, where applicable
 
+          case "${VISIBILITY}" in
+              "public" ) IMAGE_URI+="/${ENVIRONMENT}" ;;
+              "private" ) ;;
+          esac
+          IMAGE_URI+="/${IMAGE_NAME}"
+
           echo "We are creating an image for the ${GITHUB_REPOSITORY}@${ENVIRONMENT}. This is based off of the repository name and Git branch."
           echo "We try creating this even if the repo exists, so errors to that note will not create failures of the workflow."
           aws ecr create-repository \
@@ -75,12 +81,6 @@ jobs:
              --encryption-configuration encryptionType="AES256" || true
 
           export IMAGE_URI="${PRODUCT_SUITE}"
-          case "${VISIBILITY}" in
-              "public" ) IMAGE_URI+="/${ENVIRONMENT}" ;;
-              "private" ) ;;
-          esac
-          IMAGE_URI+="/${IMAGE_NAME}"
-
           # Stow the computed values for future consumption
           echo "export PRODUCT_SUITE=${PRODUCT_SUITE@Q}" >> .env
           echo "export ENVIRONMENT=${ENVIRONMENT@Q}" >> .env
