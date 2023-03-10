@@ -171,7 +171,7 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           source .env
-          export TAG="$(grep "^[[:space:]]*ARG[[:space:]]+VER[[:space:]]*=" Dockerfile | head -1 | sed -e 's;^[^=]*=\s*\(.*\)$;\1;g' -e 's;\s*$;;g')"
+          export TAG="$(grep "^[[:space:]]*ARG[[:space:]]\+VER[[:space:]]*=" Dockerfile | head -1 | sed -e 's;^[^=]*=\s*\(.*\)$;\1;g' -e 's;\s*$;;g')"
           # If the value is wrapped in quotes, then we eval it
           if [[ "${TAG}" =~ ^".*"$ ]] || [[ "${TAG}" =~ ^'.*'$ ]] ; then
               eval "TAG=${TAG}"
