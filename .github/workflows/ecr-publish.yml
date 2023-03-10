@@ -1,0 +1,156 @@
+name: ECR Dependencies and Push Images
+on:
+  workflow_call:
+    secrets:
+      ECR_AWS_REGION:
+        required: true
+      ECR_AWS_ORG_ID:
+        required: true
+      ECR_AWS_ACCESS_KEY:
+        required: true
+      ECR_AWS_ACCOUNT_ID:
+        required: true
+      ECR_SECRET_ACCESS_KEY:
+        required: true
+
+env:
+  ECR_AWS_REGION: ${{ secrets.ECR_AWS_REGION }}
+  ECR_AWS_ORG_ID: ${{ secrets.ECR_AWS_ORG_ID }}
+jobs:
+  ECR-Publishing:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.ECR_AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.ECR_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.ECR_AWS_REGION }}
+          mask-aws-account-id: ${{ secrets.ECR_AWS_ACCOUNT_ID }}
+
+      - name: Public or Private Repo
+        run: |
+          echo "We default to private for now. Public operations TBD"
+          if [[ $REPO_VISABILITY == 'public' ]]; then export REPO_VISABILITY=public; else export REPO_VISABILITY=private; fi;
+          echo "export REPO_VISABILITY=$REPO_VISABILITY" > .env
+
+      - name: Create ECR Repo
+        run: |
+          source .env
+          if [[ $GITHUB_REF == 'refs/heads/main' ]]; then export ENVIRONMENT=stable; else export ENVIRONMENT=devel; fi;
+          # echo $ENVIRONMENT
+          # echo $GITHUB_REPOSITORY
+          if [[ $REPO_VISABILITY == 'private' ]]; then export IMAGE_NAME=$(echo $GITHUB_REPOSITORY | cut -d/ -f2 | sed 's/ark_/arkcase\//'); else export IMAGE_NAME=$(echo $GITHUB_REPOSITORY |cut -d/ -f2 | sed 's/ark_//'); fi;
+          # echo $IMAGE_NAME
+          # echo "${ENVIRONMENT}/${IMAGE_NAME}"
+          # echo "${ECR_REGISTRY}"
+          echo "We are creating a ${IMAGE_NAME} repository under ${ENVIRONMENT} environment. This based from your repository name and Git branch."
+          echo "We try creating this even if the repo exists, so errors to that note will not create failures of the workflow."
+          aws ecr create-repository \
+             --region ${ECR_AWS_REGION} \
+             --repository-name ${ENVIRONMENT}/${IMAGE_NAME}  \
+             --image-tag-mutability MUTABLE --image-scanning-configuration scanOnPush=true  \
+             --encryption-configuration encryptionType="AES256" || true
+          echo "export ENVIRONMENT=$ENVIRONMENT" >> .env
+          echo "export IMAGE_NAME=$IMAGE_NAME" >> .env
+
+      - name: Create Access Permissions
+        run: |
+          source .env
+          cat << POL_STATEMENT > ecr_read_policy.json
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "org-ecr-read",
+                "Effect": "Allow",
+                "Principal": "*",
+                "Action": [
+                  "ecr:BatchCheckLayerAvailability",
+                  "ecr:BatchGetImage",
+                  "ecr:DescribeImageScanFindings",
+                  "ecr:DescribeImages",
+                  "ecr:DescribeRepositories",
+                  "ecr:GetDownloadUrlForLayer",
+                  "ecr:GetLifecyclePolicy",
+                  "ecr:GetLifecyclePolicyPreview",
+                  "ecr:GetRepositoryPolicy",
+                  "ecr:ListImages",
+                  "ecr:ListTagsForResource"
+                ],
+                "Condition": {
+                  "ForAnyValue:StringEquals": {
+                    "aws:PrincipalOrgID": [
+                      "${ECR_AWS_ORG_ID}"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+          POL_STATEMENT
+
+      - name: Update Repository Permissions
+        run: |
+          source .env
+          echo "${ENVIRONMENT}/${IMAGE_NAME}"
+          aws ecr set-repository-policy \
+          --region ${ECR_AWS_REGION} \
+          --repository-name ${ENVIRONMENT}/${IMAGE_NAME}  \
+          --policy-text file://ecr_read_policy.json
+
+      - name: Create Lifecycle Policy
+        run: |
+          cat << LIFECYCLE_STATEMENT > ecr_lifecycle_policy.json
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep only ten images, expire all others",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 10
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+          LIFECYCLE_STATEMENT
+
+      - name: Update Repository Lifecycle Policy
+        run: |
+          source .env
+          cat ecr_lifecycle_policy.json
+          aws ecr put-lifecycle-policy \
+          --region ${ECR_AWS_REGION} \
+          --repository-name ${ENVIRONMENT}/${IMAGE_NAME}  \
+          --lifecycle-policy-text file://ecr_lifecycle_policy.json
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          source .env
+          export IMAGE_TAG=$(grep '^ARG VER' Dockerfile | cut -d= -f2 | cut -d\" -f2)
+          echo "export IMAGE_TAG=$IMAGE_TAG" >> .env
+          cat .env
+          docker build -t $ECR_REGISTRY/$ENVIRONMENT/$IMAGE_NAME:$IMAGE_TAG .
+          if [[ $ENVIRONMENT == 'stable' ]]; then docker tag $ECR_REGISTRY/$ENVIRONMENT/$IMAGE_NAME:$IMAGE_TAG $ECR_REGISTRY/$ENVIRONMENT/$IMAGE_NAME:latest; else echo "latest tag not required"; fi;
+
+      - name: Publish Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          source .env
+          docker push $ECR_REGISTRY/$ENVIRONMENT/$IMAGE_NAME:$IMAGE_TAG
+          if [[ $ENVIRONMENT == 'stable' ]]; then docker push $ECR_REGISTRY/$ENVIRONMENT/$IMAGE_NAME:latest; else echo "latest tag not required"; fi;
