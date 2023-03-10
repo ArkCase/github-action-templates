@@ -57,8 +57,9 @@ jobs:
 
           # So at this point we know that PARTS[0] is the product suite (ArkCase, for instance), and PARTS[1] is the
           # repository name (i.e. ark_something-or-other)
-          export PRODUCT_SUITE="${PARTS[0]}"
-          export IMAGE_NAME="${PARTS[1]}"
+          # Change out underscores for dashes
+          export PRODUCT_SUITE="${PARTS[0]//_/-}"
+          export IMAGE_NAME="${PARTS[1]//_/-}"
 
           # Also, to support more product suites in the future...
           case "${PRODUCT_SUITE}" in
@@ -172,12 +173,36 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           source .env
-          export TAG="$(grep "^[[:space:]]*ARG[[:space:]]\+VER[[:space:]]*=" Dockerfile | head -1 | sed -e 's;^[^=]*=\s*\(.*\)$;\1;g' -e 's;\s*$;;g')"
-          # If the value is wrapped in quotes, then we eval it to remove them without having to parse for escaped
-          # quotes and whatnot...
-          if [[ "${TAG}" =~ ^\".*\"$ ]] || [[ "${TAG}" =~ ^\'.*\'$ ]] ; then
-              eval "TAG=${TAG}"
-          fi
+          # Parse out the tag, handle the case when it's not there
+          export TAG="$(
+              set -euo pipefail
+
+              # Parsing out the version from the "VER" argument can be tricky if it's computed from others
+              # values or arguments, so let's try it with some sneaky trickery.
+
+              # TODO: There's an edge case here where there are more than one FROM clauses, and argument
+              # values are redefined ... but that's too complex for now, so let's KISS it and move on
+
+              # We have to resort to Perl's evil black magic b/c we have to cover the edge case of
+              # line continuations - we have to collapse those, first... then we can find the ARG clauses,
+              # and finally convert them all into bash "export" clauses ... which we then consume (this is
+              # why redefinition is an issue, above)
+              perl -pe 's/\\\s*\n/ /' Dockerfile | \
+                  grep "^[[:space:]]*ARG[[:space:]]" | \
+                  grep "=" | \
+                  sed -e 's;^\s*ARG\s;export ;g' > .versionParse
+ 
+              # Load the parsed arguments, now "export" clauses
+              source .versionParse
+
+              # Cleanup...
+              rm -f .versionParse
+
+              # TODO: do we want to support many possible version sources? i.e. VER, VERSION,
+              # IMAGEVER, IMAGE_VERSION, etc?
+              [ -v VER ] && [ -n "${VER}" ] && echo -n "${VER}"
+          )"
+          [ -n "${TAG}" ] || TAG="latest"
           [ "${ENVIRONMENT}" != "stable" ] && TAG="${ENVIRONMENT}-${TAG}"
           echo "export IMAGE_TAG=${TAG@Q}" >> .env
           cat .env
