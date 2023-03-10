@@ -183,14 +183,16 @@ jobs:
           export BUILD="${IMAGE_FULL_URI}:${TAG}"
           echo "export BUILDS=()" >> .env
           echo "BUILDS+=(${BUILD@Q})" >> .env
-          docker build -t "${BUILD}" .
+          ARGS=(-t "${BUILD}")
           if [ "${ENVIRONMENT}" == "stable" ] ; then
               export LATEST="${IMAGE}:latest"
               echo "BUILDS+=(${LATEST@Q})" >> .env
-              docker tag "${BUILD}" "${LATEST}"
+              ARGS+=(-t "${LATEST}")
           else
               echo "latest tag not required"
           fi
+          set -x
+          docker build "${ARGS[@]}" .
 
       - name: Publish Docker image
         env:
