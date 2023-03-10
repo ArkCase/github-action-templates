@@ -178,7 +178,7 @@ jobs:
           if [[ "${TAG}" =~ ^\".*\"$ ]] || [[ "${TAG}" =~ ^\'.*\'$ ]] ; then
               eval "TAG=${TAG}"
           fi
-          [ "${ENVIRONMENT}" != "stable" ] && TAG+="-${ENVIRONMENT}"
+          [ "${ENVIRONMENT}" != "stable" ] && TAG="${ENVIRONMENT}-${TAG}"
           echo "export IMAGE_TAG=${TAG@Q}" >> .env
           cat .env
           export IMAGE_FULL_URI="${ECR_REGISTRY}/${IMAGE_URI}"
