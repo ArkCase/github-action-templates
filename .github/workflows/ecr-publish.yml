@@ -70,7 +70,7 @@ jobs:
           #     "public" ) IMAGE_URI+="/${ENVIRONMENT}" ;;
           #     "private" ) ;;
           # esac
-          IMAGE_URI+="/${ENVIRONMENT}"
+          # IMAGE_URI+="/${ENVIRONMENT}"
           IMAGE_URI+="/${IMAGE_NAME}"
 
           echo "We are creating an image for the ${GITHUB_REPOSITORY}@${ENVIRONMENT}. This is based off of the repository name and Git branch."
@@ -139,7 +139,7 @@ jobs:
           {
             "rules": [
               {
-                "rulePriority": 1,
+                "rulePriority": 100,
                 "description": "Keep only ten images, expire all others",
                 "selection": {
                   "tagStatus": "any",
@@ -173,10 +173,12 @@ jobs:
         run: |
           source .env
           export TAG="$(grep "^[[:space:]]*ARG[[:space:]]\+VER[[:space:]]*=" Dockerfile | head -1 | sed -e 's;^[^=]*=\s*\(.*\)$;\1;g' -e 's;\s*$;;g')"
-          # If the value is wrapped in quotes, then we eval it
+          # If the value is wrapped in quotes, then we eval it to remove them without having to parse for escaped
+          # quotes and whatnot...
           if [[ "${TAG}" =~ ^\".*\"$ ]] || [[ "${TAG}" =~ ^\'.*\'$ ]] ; then
               eval "TAG=${TAG}"
           fi
+          [ "${ENVIRONMENT}" != "stable" ] && TAG+="-${ENVIRONMENT}"
           echo "export IMAGE_TAG=${TAG@Q}" >> .env
           cat .env
           export IMAGE_FULL_URI="${ECR_REGISTRY}/${IMAGE_URI}"
