@@ -141,7 +141,7 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           source .env
-          export IMAGE_TAG=$(grep '^ARG VER' Dockerfile | cut -d= -f2 | cut -d\" -f2)
+          export IMAGE_TAG=$(grep '^ARG VER' Dockerfile | head -1 | cut -d= -f2 | cut -d\" -f2)
           echo "export IMAGE_TAG=$IMAGE_TAG" >> .env
           cat .env
           docker build -t $ECR_REGISTRY/$ENVIRONMENT/$IMAGE_NAME:$IMAGE_TAG .
