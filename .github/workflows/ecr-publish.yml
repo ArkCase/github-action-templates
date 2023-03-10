@@ -186,16 +186,22 @@ jobs:
           export BUILD="${IMAGE_FULL_URI}:${TAG}"
           echo "export BUILDS=()" >> .env
           echo "BUILDS+=(${BUILD@Q})" >> .env
-          ARGS=(-t "${BUILD}")
+
+          # Set any build arguments with private values
+          export BUILD_ARGS=()
+          # First off - the base registry for the images
+          BUILD_ARGS+=(--build-arg "BASE_REGISTRY=${ECR_REGISTRY}")
+
+          # Set the build tags to be built
+          export TAGS=(--tag "${BUILD}")
           if [ "${ENVIRONMENT}" == "stable" ] ; then
               export LATEST="${IMAGE_FULL_URI}:latest"
               echo "BUILDS+=(${LATEST@Q})" >> .env
-              ARGS+=(-t "${LATEST}")
+              TAGS+=(--tag "${LATEST}")
           else
               echo "latest tag not required"
           fi
-          set -x
-          docker build "${ARGS[@]}" .
+          docker build "${BUILD_ARGS[@]}" "${TAGS[@]}" .
 
       - name: Publish Docker image
         env:
