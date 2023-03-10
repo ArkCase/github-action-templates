@@ -49,6 +49,8 @@ jobs:
               "refs/heads/main" ) ENVIRONMENT="stable" ;;
           esac
 
+          # TODO: Support finding the image name from a subfolder, where applicable
+
           # Split into an array of parts, making sure that double slashes, if present, are condensed into one
           # Also remove leading and trailing slashes, for safety. Also, fold it to lowercase
           readarray -d / -t PARTS < <(echo -n "${GITHUB_REPOSITORY,,}" | sed -e 's;^/*;;g' -e 's;/*$;;g' -e 's;/\+;/;g')
@@ -63,8 +65,7 @@ jobs:
               "arkcase" ) IMAGE_NAME="$(echo -n "${IMAGE_NAME}" | sed -e 's;^ark_;;g')" ;;
           esac
 
-          # TODO: Support finding the image name from a subfolder, where applicable
-
+          export IMAGE_URI="${PRODUCT_SUITE}"
           case "${VISIBILITY}" in
               "public" ) IMAGE_URI+="/${ENVIRONMENT}" ;;
               "private" ) ;;
@@ -80,7 +81,6 @@ jobs:
              --image-scanning-configuration scanOnPush=true  \
              --encryption-configuration encryptionType="AES256" || true
 
-          export IMAGE_URI="${PRODUCT_SUITE}"
           # Stow the computed values for future consumption
           echo "export PRODUCT_SUITE=${PRODUCT_SUITE@Q}" >> .env
           echo "export ENVIRONMENT=${ENVIRONMENT@Q}" >> .env
