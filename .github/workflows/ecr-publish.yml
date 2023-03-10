@@ -188,7 +188,7 @@ jobs:
           echo "BUILDS+=(${BUILD@Q})" >> .env
           ARGS=(-t "${BUILD}")
           if [ "${ENVIRONMENT}" == "stable" ] ; then
-              export LATEST="${IMAGE}:latest"
+              export LATEST="${IMAGE_FULL_URI}:latest"
               echo "BUILDS+=(${LATEST@Q})" >> .env
               ARGS+=(-t "${LATEST}")
           else
