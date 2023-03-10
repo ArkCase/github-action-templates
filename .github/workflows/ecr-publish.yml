@@ -34,28 +34,58 @@ jobs:
       - name: Public or Private Repo
         run: |
           echo "We default to private for now. Public operations TBD"
-          if [[ $REPO_VISABILITY == 'public' ]]; then export REPO_VISABILITY=public; else export REPO_VISABILITY=private; fi;
-          echo "export REPO_VISABILITY=$REPO_VISABILITY" > .env
+          export VISIBILITY="private"
+          [ "${VISIBILITY}" == "public" ] && VISIBILITY="public"
+          echo "export VISIBILITY='${VISIBILITY}'" > .env
 
       - name: Create ECR Repo
         run: |
           source .env
-          if [[ $GITHUB_REF == 'refs/heads/main' ]]; then export ENVIRONMENT=stable; else export ENVIRONMENT=devel; fi;
-          # echo $ENVIRONMENT
-          # echo $GITHUB_REPOSITORY
-          if [[ $REPO_VISABILITY == 'private' ]]; then export IMAGE_NAME=$(echo $GITHUB_REPOSITORY | cut -d/ -f2 | sed 's/ark_/arkcase\//'); else export IMAGE_NAME=$(echo $GITHUB_REPOSITORY |cut -d/ -f2 | sed 's/ark_//'); fi;
-          # echo $IMAGE_NAME
-          # echo "${ENVIRONMENT}/${IMAGE_NAME}"
-          # echo "${ECR_REGISTRY}"
-          echo "We are creating a ${IMAGE_NAME} repository under ${ENVIRONMENT} environment. This based from your repository name and Git branch."
+
+          # Assume the default is "devel", until proven otherwise
+          export ENVIRONMENT="devel"
+          # This makes it easier to add special branch handlers later on
+          case "${GITHUB_REF}" in
+              "refs/heads/main" ) ENVIRONMENT="stable" ;;
+          esac
+
+          # Split into an array of parts, making sure that double slashes, if present, are condensed into one
+          # Also remove leading and trailing slashes, for safety. Also, fold it to lowercase
+          readarray -d / -t PARTS < <(echo -n "${GITHUB_REPOSITORY,,}" | sed -e 's;^/*;;g' -e 's;/*$;;g' -e 's;/\+;/;g')
+
+          # So at this point we know that PARTS[0] is the product suite (ArkCase, for instance), and PARTS[1] is the
+          # repository name (i.e. ark_something-or-other)
+          export PRODUCT_SUITE="${PARTS[0]}"
+          export IMAGE_NAME="${PARTS[1]}"
+
+          # Also, to support more product suites in the future...
+          case "${PRODUCT_SUITE}" in
+              "arkcase" ) IMAGE_NAME="$(echo -n "${IMAGE_NAME}" | sed -e 's;^ark_;;g')" ;;
+          esac
+
+          # TODO: Support finding the image name from a subfolder, where applicable
+
+          echo "We are creating an image for the ${GITHUB_REPOSITORY}@${ENVIRONMENT}. This is based off of the repository name and Git branch."
           echo "We try creating this even if the repo exists, so errors to that note will not create failures of the workflow."
           aws ecr create-repository \
-             --region ${ECR_AWS_REGION} \
-             --repository-name ${ENVIRONMENT}/${IMAGE_NAME}  \
-             --image-tag-mutability MUTABLE --image-scanning-configuration scanOnPush=true  \
+             --region "${ECR_AWS_REGION}" \
+             --repository-name "${ENVIRONMENT}/${IMAGE_NAME}" \
+             --image-tag-mutability MUTABLE \
+             --image-scanning-configuration scanOnPush=true  \
              --encryption-configuration encryptionType="AES256" || true
-          echo "export ENVIRONMENT=$ENVIRONMENT" >> .env
-          echo "export IMAGE_NAME=$IMAGE_NAME" >> .env
+
+          export IMAGE_URI="${PRODUCT_SUITE}"
+          case "${VISIBILITY}" in
+              "public" ) IMAGE_URI+="/${ENVIRONMENT}" ;;
+              "private" ) ;;
+          esac
+          IMAGE_URI+="/${IMAGE_NAME}"
+
+          # Stow the computed values for future consumption
+          echo "export PRODUCT_SUITE=${PRODUCT_SUITE@Q}" >> .env
+          echo "export ENVIRONMENT=${ENVIRONMENT@Q}" >> .env
+          echo "export IMAGE_NAME=${IMAGE_NAME@Q}" >> .env
+          echo "export IMAGE_URI=${IMAGE_URI@Q}" >> .env
 
       - name: Create Access Permissions
         run: |
@@ -96,10 +126,10 @@ jobs:
       - name: Update Repository Permissions
         run: |
           source .env
-          echo "${ENVIRONMENT}/${IMAGE_NAME}"
+          echo "${IMAGE_URI}"
           aws ecr set-repository-policy \
-          --region ${ECR_AWS_REGION} \
-          --repository-name ${ENVIRONMENT}/${IMAGE_NAME}  \
+          --region "${ECR_AWS_REGION}" \
+          --repository-name "${IMAGE_URI}" \
           --policy-text file://ecr_read_policy.json
 
       - name: Create Lifecycle Policy
@@ -128,8 +158,8 @@ jobs:
           source .env
           cat ecr_lifecycle_policy.json
           aws ecr put-lifecycle-policy \
-          --region ${ECR_AWS_REGION} \
-          --repository-name ${ENVIRONMENT}/${IMAGE_NAME}  \
+          --region "${ECR_AWS_REGION}" \
+          --repository-name "${IMAGE_URI}" \
           --lifecycle-policy-text file://ecr_lifecycle_policy.json
 
       - name: Login to Amazon ECR
@@ -141,16 +171,33 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           source .env
-          export IMAGE_TAG=$(grep '^ARG VER' Dockerfile | head -1 | cut -d= -f2 | cut -d\" -f2)
-          echo "export IMAGE_TAG=$IMAGE_TAG" >> .env
+          export TAG="$(grep "^[[:space:]]*ARG[[:space:]]+VER[[:space:]]*=" Dockerfile | head -1 | sed -e 's;^[^=]*=\s*\(.*\)$;\1;g' -e 's;\s*$;;g')"
+          # If the value is wrapped in quotes, then we eval it
+          if [[ "${TAG}" =~ ^".*"$ ]] || [[ "${TAG}" =~ ^'.*'$ ]] ; then
+              eval "TAG=${TAG}"
+          fi
+          echo "export IMAGE_TAG=${TAG@Q}" >> .env
           cat .env
-          docker build -t $ECR_REGISTRY/$ENVIRONMENT/$IMAGE_NAME:$IMAGE_TAG .
-          if [[ $ENVIRONMENT == 'stable' ]]; then docker tag $ECR_REGISTRY/$ENVIRONMENT/$IMAGE_NAME:$IMAGE_TAG $ECR_REGISTRY/$ENVIRONMENT/$IMAGE_NAME:latest; else echo "latest tag not required"; fi;
+          export IMAGE_FULL_URI="${ECR_REGISTRY}/${IMAGE_URI}"
+          echo "export IMAGE_FULL_URI=${IMAGE_FULL_URI@Q}" >> .env
+          export BUILD="${IMAGE_FULL_URI}:${TAG}"
+          echo "export BUILDS=()" >> .env
+          echo "BUILDS+=(${BUILD@Q})" >> .env
+          docker build -t "${BUILD}" .
+          if [ "${ENVIRONMENT}" == "stable" ] ; then
+              export LATEST="${IMAGE}:latest"
+              echo "BUILDS+=(${LATEST@Q})" >> .env
+              docker tag "${BUILD}" "${LATEST}"
+          else
+              echo "latest tag not required"
+          fi
 
       - name: Publish Docker image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           source .env
-          docker push $ECR_REGISTRY/$ENVIRONMENT/$IMAGE_NAME:$IMAGE_TAG
-          if [[ $ENVIRONMENT == 'stable' ]]; then docker push $ECR_REGISTRY/$ENVIRONMENT/$IMAGE_NAME:latest; else echo "latest tag not required"; fi;
+          # Iterate over the array of built artifacts, and push them
+          for BUILD in "${BUILDS[@]}" ; do
+              docker push "${BUILD}"
+          done
