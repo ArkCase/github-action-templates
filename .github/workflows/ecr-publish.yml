@@ -66,10 +66,11 @@ jobs:
           esac
 
           export IMAGE_URI="${PRODUCT_SUITE}"
-          case "${VISIBILITY}" in
-              "public" ) IMAGE_URI+="/${ENVIRONMENT}" ;;
-              "private" ) ;;
-          esac
+          # case "${VISIBILITY}" in
+          #     "public" ) IMAGE_URI+="/${ENVIRONMENT}" ;;
+          #     "private" ) ;;
+          # esac
+          IMAGE_URI+="/${ENVIRONMENT}"
           IMAGE_URI+="/${IMAGE_NAME}"
 
           echo "We are creating an image for the ${GITHUB_REPOSITORY}@${ENVIRONMENT}. This is based off of the repository name and Git branch."
