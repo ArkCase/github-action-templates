@@ -187,20 +187,26 @@ jobs:
               # line continuations - we have to collapse those, first... then we can find the ARG clauses,
               # and finally convert them all into bash "export" clauses ... which we then consume (this is
               # why redefinition is an issue, above)
-              perl -pe 's/\\\s*\n/ /' Dockerfile | \
-                  grep "^[[:space:]]*ARG[[:space:]]" | \
-                  grep "=" | \
-                  sed -e 's;^\s*ARG\s;export ;g' > .versionParse
+              source <(
+                  perl -pe 's/\\\s*$//' Dockerfile | \
+                      grep "^[[:space:]]*ARG[[:space:]]" | \
+                      grep "=" | \
+                      sed -e 's;^\s*ARG\s;export ;g'
+              )
  
-              # Load the parsed arguments, now "export" clauses
-              source .versionParse
-
-              # Cleanup...
-              rm -f .versionParse
-
+              CANDIDATES=()
+              CANDIDATES+=("VER")
               # TODO: do we want to support many possible version sources? i.e. VER, VERSION,
               # IMAGEVER, IMAGE_VERSION, etc?
-              [ -v VER ] && [ -n "${VER}" ] && echo -n "${VER}"
+              # CANDIDATES+=("VERSION")
+              # CANDIDATES+=("IMAGEVER")
+              # CANDIDATES+=("IMAGEVERSION")
+              # CANDIDATES+=("IMAGE_VERSION")
+              for C in "${CANDIDATES[@]}" ; do
+                  # This checks to see if the candidate is defined, and if it has a non-blank
+                  # value. If both are met, then its value is output, and the loop is broken
+                  [ -v "${C}" ] && [ -n "${!C}" ] && echo -n "${!C}" && break
+              done
           )"
           [ -n "${TAG}" ] || TAG="latest"
           [ "${ENVIRONMENT}" != "stable" ] && TAG="${ENVIRONMENT}-${TAG}"
