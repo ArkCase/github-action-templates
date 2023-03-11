@@ -63,7 +63,7 @@ jobs:
 
           # Also, to support more product suites in the future...
           case "${PRODUCT_SUITE}" in
-              "arkcase" ) IMAGE_NAME="$(echo -n "${IMAGE_NAME}" | sed -e 's;^ark_;;g')" ;;
+              "arkcase" ) IMAGE_NAME="$(echo -n "${IMAGE_NAME}" | sed -e 's;^ark-;;g')" ;;
           esac
 
           export IMAGE_URI="${PRODUCT_SUITE}"
