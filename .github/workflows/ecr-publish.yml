@@ -135,6 +135,10 @@ jobs:
           export BUILD_ARGS=()
           # First off - the base registry for the images
           BUILD_ARGS+=(--build-arg "BASE_REGISTRY=${ECR_REGISTRY}")
+          # Next, add all the stuff S3 will need to pull crap
+          BUILD_ARGS+=(--build-arg "AWS_ACCESS_KEY_ID=${ECR_AWS_ACCESS_KEY}")
+          BUILD_ARGS+=(--build-arg "AWS_SECRET_ACCESS_KEY=${ECR_AWS_SECRET_ACCESS_KEY}")
+          BUILD_ARGS+=(--build-arg "AWS_REGION=${ECR_AWS_REGION}")
 
           # Set the build tags to be built
           export TAGS=(--tag "${BUILD}")
