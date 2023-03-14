@@ -150,6 +150,9 @@ jobs:
           BUILD_ARGS+=(--build-arg "AWS_ACCESS_KEY_ID=${ECR_AWS_ACCESS_KEY}")
           BUILD_ARGS+=(--build-arg "AWS_SECRET_ACCESS_KEY=${ECR_AWS_SECRET_ACCESS_KEY}")
           BUILD_ARGS+=(--build-arg "AWS_REGION=${ECR_AWS_REGION}")
+          BUILD_ARGS+=(--label "GIT_REPOSITORY=${GITHUB_REPOSITORY}")
+          BUILD_ARGS+=(--label "GIT_BRANCH=${GITHUB_REF_NAME}")
+          BUILD_ARGS+=(--label "GIT_COMMIT=${GITHUB_SHA}")
 
           # Set the build tags to be built
           export TAGS=(--tag "${BUILD}")
