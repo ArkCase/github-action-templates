@@ -31,6 +31,12 @@ jobs:
           aws-region: ${{ secrets.ECR_AWS_REGION }}
           mask-aws-account-id: ${{ secrets.ECR_AWS_ACCOUNT_ID }}
 
+        # The AWS login needs to happen before the build b/c the ECR_REGISTRY value
+        # is computed as part of this process
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
       - name: Public or Private Repo
         run: |
           echo "We default to private for now. Public operations TBD"
@@ -238,10 +244,6 @@ jobs:
           --region "${ECR_AWS_REGION}" \
           --repository-name "${IMAGE_URI}" \
           --lifecycle-policy-text file://ecr_lifecycle_policy.json
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
 
       - name: Publish Docker image
         env:
