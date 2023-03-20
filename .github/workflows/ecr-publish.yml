@@ -37,7 +37,7 @@ jobs:
 
       - name: Docker Login to Alfresco Quay.IO
         env:
-          ALF_QUAY_IO_USER: ${{ ALF_QUAY_IO_USER }}
+          ALF_QUAY_IO_USER: ${{ secrets.ALF_QUAY_IO_USER }}
           ALF_QUAY_IO_PASSWORD: ${{ secrets.ALF_QUAY_IO_PASSWORD }}
         run: |
           if [ -v ALF_QUAY_IO_USER ] && [ -v ALF_QUAY_IO_PASSWORD ] && [ -n "${ALF_QUAY_IO_USER}" ] && [ -n "${ALF_QUAY_IO_PASSWORD}" ] ; then
