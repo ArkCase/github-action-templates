@@ -12,6 +12,10 @@ on:
         required: true
       ECR_AWS_SECRET_ACCESS_KEY:
         required: true
+      ALF_QUAY_IO_USER:
+        required: false
+      ALF_QUAY_IO_PASSWORD:
+        required: false
 
 env:
   ECR_AWS_REGION: ${{ secrets.ECR_AWS_REGION }}
@@ -30,6 +34,17 @@ jobs:
           aws-secret-access-key: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.ECR_AWS_REGION }}
           mask-aws-account-id: ${{ secrets.ECR_AWS_ACCOUNT_ID }}
+
+      - name: Docker Login to Alfresco Quay.IO
+        env:
+          ALF_QUAY_IO_USER: ${{ ALF_QUAY_IO_USER }}
+          ALF_QUAY_IO_PASSWORD: ${{ secrets.ALF_QUAY_IO_PASSWORD }}
+        run: |
+          if [ -v ALF_QUAY_IO_USER ] && [ -v ALF_QUAY_IO_PASSWORD ] && [ -n "${ALF_QUAY_IO_USER}" ] && [ -n "${ALF_QUAY_IO_PASSWORD}" ] ; then
+              docker login -u "${ALF_QUAY_IO_USER}" -p "${ALF_QUAY_IO_PASSWORD}" quay.io
+          else
+              echo "The quay.io credentials were either not given, or are insufficient. Will not authenticate."
+          fi
 
         # The AWS login needs to happen before the build b/c the ECR_REGISTRY value
         # is computed as part of this process
