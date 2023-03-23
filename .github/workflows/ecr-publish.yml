@@ -127,6 +127,9 @@ jobs:
               # BASH variables which can cause the task to fail, and we use special SED strings to add the
               # prefix as necessary for variable expansion among the arguments themselves
               export PREFIX="_DOCKER_ARG_"
+              # It's OK to define this here ... if it gets overridden below, we're happy about it. Otherwise,
+              # we fall back to this value.
+              eval export "${PREFIX}BASE_REGISTRY=${ECR_REGISTRY@Q}"
               source <(
                   perl -pe 's/\\\s*$//' Dockerfile | \
                       grep "^[[:space:]]*ARG[[:space:]]" | \
