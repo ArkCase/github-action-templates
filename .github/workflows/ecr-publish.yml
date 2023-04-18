@@ -330,9 +330,11 @@ jobs:
           [ -v SHORT_CIRCUIT ] && "${SHORT_CIRCUIT}" && exit 0
           "${PUSH_TO_PUBLIC}" || exit 0
 
-          echo "Creating the public repository for ${IMAGE_URI}..."
+          IMAGE_REAL_URI="${IMAGE_URI}"
+          [[ "${IMAGE_URI}" =~ ^arkcase/(.*)$ ]] && IMAGE_REAL_URI="${BASH_REMATCH[1]}"
+          echo "Creating the public repository for ${IMAGE_URI} (as ${IMAGE_REAL_URI})..."
           aws ecr-public create-repository \
-             --repository-name "${IMAGE_URI}" \
+             --repository-name "${IMAGE_REAL_URI}" \
              --region "${ECR_AWS_REGION}" || true
 
       - name: Create Access Permissions
