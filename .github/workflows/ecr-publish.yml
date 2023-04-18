@@ -308,16 +308,14 @@ jobs:
               git push --tags
           fi
 
-      - name: Create ECR Repo
+      - name: Create Private ECR Repo
         run: |
           source .env
           # Short circuit, if requested
           [ -v SHORT_CIRCUIT ] && "${SHORT_CIRCUIT}" && exit 0
 
-          echo "We are creating an image for the ${GITHUB_REPOSITORY}@${ENVIRONMENT}. This is based off of the repository name and Git branch."
-          echo "We try creating this even if the repo exists, so errors to that note will not create failures of the workflow."
-
           # All images have private repositories
+          echo "Creating the private repository for ${IMAGE_URI}..."
           aws ecr create-repository \
              --repository-name "${IMAGE_URI}" \
              --region "${ECR_AWS_REGION}" \
@@ -325,11 +323,17 @@ jobs:
              --image-scanning-configuration scanOnPush=true  \
              --encryption-configuration encryptionType="AES256" || true
 
-          if "${PUSH_TO_PUBLIC}" ; then
-              aws ecr-public create-repository \
-                 --repository-name "${IMAGE_URI}" \
-                 --region "${ECR_AWS_REGION}"
-          fi
+      - name: Create Public ECR Repo (if applicable)
+        run: |
+          source .env
+          # Short circuit, if requested
+          [ -v SHORT_CIRCUIT ] && "${SHORT_CIRCUIT}" && exit 0
+          "${PUSH_TO_PUBLIC}" || exit 0
+
+          echo "Creating the public repository for ${IMAGE_URI}..."
+          aws ecr-public create-repository \
+             --repository-name "${IMAGE_URI}" \
+             --region "${ECR_AWS_REGION}" || true
 
       - name: Create Access Permissions
         run: |
