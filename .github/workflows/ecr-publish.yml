@@ -20,6 +20,7 @@ on:
 env:
   ECR_AWS_REGION: ${{ secrets.ECR_AWS_REGION }}
   ECR_AWS_ORG_ID: ${{ secrets.ECR_AWS_ORG_ID }}
+
 jobs:
   ECR-Publishing:
     runs-on: ubuntu-latest
@@ -35,33 +36,54 @@ jobs:
           aws-region: ${{ secrets.ECR_AWS_REGION }}
           mask-aws-account-id: ${{ secrets.ECR_AWS_ACCOUNT_ID }}
 
-      - name: Docker Login to Alfresco Quay.IO
+      - name: Docker Login to Alfresco Quay.IO (if applicable)
         env:
           ALF_QUAY_IO_USER: ${{ secrets.ALF_QUAY_IO_USER }}
           ALF_QUAY_IO_PASSWORD: ${{ secrets.ALF_QUAY_IO_PASSWORD }}
         run: |
+          # Start with a clean environment
+          : > .env
+
           if [ -v ALF_QUAY_IO_USER ] && [ -v ALF_QUAY_IO_PASSWORD ] && [ -n "${ALF_QUAY_IO_USER}" ] && [ -n "${ALF_QUAY_IO_PASSWORD}" ] ; then
               docker login -u "${ALF_QUAY_IO_USER}" -p "${ALF_QUAY_IO_PASSWORD}" quay.io
           else
               echo "The quay.io credentials were either not given, or are insufficient. Will not authenticate."
           fi
 
-        # The AWS login needs to happen before the build b/c the ECR_REGISTRY value
-        # is computed as part of this process
-      - name: Login to Amazon ECR
+        # The AWS login needs to happen before the build b/c the
+        # ECR_REGISTRY_PRIVATE value is computed here
+      - name: Login to Amazon ECR (Private)
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
 
-      - name: Public or Private Repo
-        run: |
-          echo "We default to private for now. Public operations TBD"
-          export VISIBILITY="private"
-          [ "${VISIBILITY}" == "public" ] && VISIBILITY="public"
-          echo "export VISIBILITY='${VISIBILITY}'" > .env
+        # The AWS login needs to happen before the build b/c the
+        # ECR_REGISTRY_PUBLIC value is computed here
+      - name: Login to Amazon ECR (Public)
+        id: login-ecr-public
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          registry-type: public
 
-      - name: Indentify the image repo being built
+      - name: Identify the type of job being run
         run: |
-          source .env
+          # Check to see the project's visibility
+          export PRIVATE="$(gh repo view --json isPrivate --jq .isPrivate)"
+          export VISIBILITY="public"
+          "${PRIVATE}" && VISIBILITY="private"
+          echo "export VISIBILITY=${VISIBILITY@Q}" >> .env
+
+          # Is this a push event, or a scheduled event?
+          export TRIGGER="push"
+          case "${GITHUB_EVENT_NAME,,}" in
+
+              # This is a push/commit to a watched branch
+              push ) TRIGGER="push" ;;
+
+              # This is a nightly build
+              schedule ) TRIGGER="nightly" ;;
+
+          esac
+          echo "export TRIGGER=${TRIGGER@Q}" >> .env
 
           # Assume the default is "devel", until proven otherwise
           export ENVIRONMENT="devel"
@@ -69,23 +91,62 @@ jobs:
           case "${GITHUB_REF}" in
               "refs/heads/main" ) ENVIRONMENT="stable" ;;
           esac
+          echo "export ENVIRONMENT=${ENVIRONMENT@Q}" >> .env
 
-          # TODO: Support finding the image name from a subfolder, where applicable
+          # Let's make sure we don't need to short-circuit this build
+          if [ "${TRIGGER}" == "nightly" ] ; then
+              case "${ENVIRONMENT}" in
+
+                  devel )
+                      # Check to see if we need to run this nightly by comparing HEAD
+                      # to the latest nightly tag (selected by date)
+                      LAST="$(git tag -l | egrep "^nightly/" | sort -t / -k 3 -n | tail -1)"
+                      if [ -n "${LAST}" ] && git diff --quiet "${LAST}" HEAD ; then
+                          # No changes, so short circuit everything
+                          echo "export SHORT_CIRCUIT=true" > .env
+                          exit 0
+                      fi
+                      ;;
+
+                  stable )
+                      # We don't do nightlies of stable stuff
+                      echo "export SHORT_CIRCUIT=true" > .env
+                      exit 0
+                      ;;
+
+              esac
+          fi
+
+          # An artifact may only be published if it comes from a public repository,
+          # and is either a build from the main branch, or a nightly build
+          export PUSH_TO_PUBLIC="false"
+          if [ "${ENVIRONMENT}" == "stable" ] || [ "${TRIGGER}" == "nightly" ] ; then
+              [ "${VISIBILITY}" == "public" ] && PUSH_TO_PUBLIC="true"
+          fi
+          echo "export PUSH_TO_PUBLIC=${PUSH_TO_PUBLIC@Q}" >> .env
+
+      - name: Indentify the image repo being built
+        run: |
+          source .env
+          # Short circuit, if requested
+          [ -v SHORT_CIRCUIT ] && "${SHORT_CIRCUIT}" && exit 0
 
           # Split into an array of parts, making sure that double slashes, if present, are condensed into one
           # Also remove leading and trailing slashes, for safety. Also, fold it to lowercase
-          readarray -d / -t PARTS < <(echo -n "${GITHUB_REPOSITORY,,}" | sed -e 's;^/*;;g' -e 's;/*$;;g' -e 's;/\+;/;g')
+          readarray -d / -t PARTS < <(echo -n "${GITHUB_REPOSITORY,,}" | sed -e "s;^/*;;g" -e "s;/*$;;g" -e "s;/\+;/;g")
 
           # So at this point we know that PARTS[0] is the product suite (ArkCase, for instance), and PARTS[1] is the
           # repository name (i.e. ark_something-or-other)
           # Change out underscores for dashes
           export PRODUCT_SUITE="${PARTS[0]//_/-}"
           export IMAGE_NAME="${PARTS[1]//_/-}"
+          echo "export IMAGE_NAME=${IMAGE_NAME@Q}" >> .env
 
           # Also, to support more product suites in the future...
           case "${PRODUCT_SUITE}" in
-              "arkcase" ) IMAGE_NAME="$(echo -n "${IMAGE_NAME}" | sed -e 's;^ark-;;g')" ;;
+              "arkcase" ) IMAGE_NAME="$(echo -n "${IMAGE_NAME}" | sed -e "s;^ark-;;g")" ;;
           esac
+          echo "export PRODUCT_SUITE=${PRODUCT_SUITE@Q}" >> .env
 
           export IMAGE_URI="${PRODUCT_SUITE}"
           # case "${VISIBILITY}" in
@@ -94,31 +155,23 @@ jobs:
           # esac
           # IMAGE_URI+="/${ENVIRONMENT}"
           IMAGE_URI+="/${IMAGE_NAME}"
-
-          # Stow the computed values for future consumption
-          echo "export PRODUCT_SUITE=${PRODUCT_SUITE@Q}" >> .env
-          echo "export ENVIRONMENT=${ENVIRONMENT@Q}" >> .env
-          echo "export IMAGE_NAME=${IMAGE_NAME@Q}" >> .env
           echo "export IMAGE_URI=${IMAGE_URI@Q}" >> .env
 
-      - name: Build Docker image
+      - name: Indentify the image version being built
         env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_AWS_REGION: ${{ secrets.ECR_AWS_REGION }}
-          ECR_AWS_ACCESS_KEY: ${{ secrets.ECR_AWS_ACCESS_KEY }}
-          ECR_AWS_SECRET_ACCESS_KEY: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
+          ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
         run: |
           source .env
+          # Short circuit, if requested
+          [ -v SHORT_CIRCUIT ] && "${SHORT_CIRCUIT}" && exit 0
 
           # Parse out the tag, handle the case when it's not there
-          export TAG="$(
+          export BUILD_VERSION="$(
               set -euo pipefail
 
               # Parsing out the version from the "VER" argument can be tricky if it's computed from others
               # values or arguments, so let's try it with some sneaky trickery.
-
-              # TODO: There's an edge case here where there are more than one FROM clauses, and argument
-              # values are redefined ... but that's too complex for now, so let's KISS it and move on
 
               # We have to resort to Perl's evil black magic b/c we have to cover the edge case of
               # line continuations - we have to collapse those, first... then we can find the ARG clauses,
@@ -126,14 +179,13 @@ jobs:
               # why redefinition is an issue, above). We use a PREFIX to avoid name clashes with read-only
               # BASH variables which can cause the task to fail, and we use special SED strings to add the
               # prefix as necessary for variable expansion among the arguments themselves
-              export PREFIX="_DOCKER_ARG_"
+              export PREFIX="____DOCKER_ARG____"
               # It's OK to define this here ... if it gets overridden below, we're happy about it. Otherwise,
               # we fall back to this value.
-              eval export "${PREFIX}BASE_REGISTRY=${ECR_REGISTRY@Q}"
+              eval export "${PREFIX}PRIVATE_REGISTRY=${ECR_REGISTRY_PRIVATE@Q}"
               source <(
-                  perl -pe 's/\\\s*$//' Dockerfile | \
-                      grep "^[[:space:]]*ARG[[:space:]]" | \
-                      grep "=" | \
+                  perl -pe "s/\\\s*$//" Dockerfile | \
+                      egrep '^[[:space:]]*ARG[[:space:]]+[^=]+=' \
                       sed -e "s;\${;\$\{${PREFIX};g" \
                           -e "s;\$\([^{]\);\$${PREFIX}\1;g" | \
                       sed -e "s;^\s*ARG\s;export ${PREFIX};g"
@@ -154,20 +206,42 @@ jobs:
                   [ -v "${C}" ] && [ -n "${!C}" ] && echo -n "${!C}" && break
               done
           )"
-          [ -n "${TAG}" ] || TAG="latest"
-          [ "${ENVIRONMENT}" != "stable" ] && TAG="${ENVIRONMENT}-${TAG}"
+          [ -n "${BUILD_VERSION}" ] || BUILD_VERSION="latest"
+          echo "export BUILD_VERSION=${BUILD_VERSION@Q}" >> .env
+
+      - name: Build Docker image
+        env:
+          ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
+          ECR_AWS_REGION: ${{ secrets.ECR_AWS_REGION }}
+          ECR_AWS_ACCESS_KEY: ${{ secrets.ECR_AWS_ACCESS_KEY }}
+          ECR_AWS_SECRET_ACCESS_KEY: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
+        run: |
+          source .env
+          # Short circuit, if requested
+          [ -v SHORT_CIRCUIT ] && "${SHORT_CIRCUIT}" && exit 0
+
+          export TAG="${BUILD_VERSION}"
+          export NIGHTLY_STAMP=""
+          if [ "${TRIGGER}" == "nightly" ] ; then
+              # NIGHTLY_STAMP="$(date -u +%Y%m%d)"
+              NIGHTLY_STAMP="$(date -u +%Y%m%d-%H%M%S)"
+              TAG="nightly-${NIGHTLY_STAMP}-${TAG}"
+          else
+              [ "${ENVIRONMENT}" != "stable" ] && TAG="${ENVIRONMENT}-${TAG}"
+          fi
+          echo "export NIGHTLY_STAMP=${NIGHTLY_STAMP@Q}" >> .env
           echo "export IMAGE_TAG=${TAG@Q}" >> .env
+
           cat .env
-          export IMAGE_FULL_URI="${ECR_REGISTRY}/${IMAGE_URI}"
-          echo "export IMAGE_FULL_URI=${IMAGE_FULL_URI@Q}" >> .env
-          export BUILD="${IMAGE_FULL_URI}:${TAG}"
-          echo "export BUILDS=()" >> .env
-          echo "BUILDS+=(${BUILD@Q})" >> .env
 
           # Set any build arguments with private values
           export BUILD_ARGS=()
-          # First off - the base registry for the images
-          BUILD_ARGS+=(--build-arg "BASE_REGISTRY=${ECR_REGISTRY}")
+
+          # Select the base registries
+          BUILD_ARGS+=(--build-arg "PRIVATE_REGISTRY=${ECR_REGISTRY_PRIVATE}")
+          BUILD_ARGS+=(--build-arg "PUBLIC_REGISTRY=${ECR_REGISTRY_PUBLIC}")
+
           # Next, add all the stuff S3 will need to pull crap
           BUILD_ARGS+=(--build-arg "AWS_ACCESS_KEY_ID=${ECR_AWS_ACCESS_KEY}")
           BUILD_ARGS+=(--build-arg "AWS_SECRET_ACCESS_KEY=${ECR_AWS_SECRET_ACCESS_KEY}")
@@ -176,34 +250,93 @@ jobs:
           BUILD_ARGS+=(--label "GIT_BRANCH=${GITHUB_REF_NAME}")
           BUILD_ARGS+=(--label "GIT_COMMIT=${GITHUB_SHA}")
 
+          export IMAGE_URI_PRIVATE="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}"
+          echo "export IMAGE_URI_PRIVATE=${IMAGE_URI_PRIVATE@Q}" >> .env
+
+          if "${PUSH_TO_PUBLIC}" ; then
+              export IMAGE_URI_PUBLIC="${ECR_REGISTRY_PUBLIC}/${IMAGE_URI}"
+              echo "export IMAGE_URI_PUBLIC=${IMAGE_URI_PUBLIC@Q}" >> .env
+          fi
+
+          echo "export BUILDS=()" >> .env
+
           # Set the build tags to be built
-          export TAGS=(--tag "${BUILD}")
+          TAGS=()
+
+          # The main tag - always built
+          BUILD="${IMAGE_URI_PRIVATE}:${TAG}"
+          echo "BUILDS+=(${BUILD@Q})" >> .env
+          TAGS+=(--tag "${BUILD}")
+          if "${PUSH_TO_PUBLIC}" ; then
+              BUILD="${IMAGE_URI_PUBLIC}:${TAG}"
+              echo "BUILDS+=(${BUILD@Q})" >> .env
+              TAGS+=(--tag "${BUILD}")
+          fi
+
+          # Check to see if we have to also do a "latest"
           if [ "${ENVIRONMENT}" == "stable" ] ; then
-              export LATEST="${IMAGE_FULL_URI}:latest"
+              LATEST="${IMAGE_URI_PRIVATE}:latest"
               echo "BUILDS+=(${LATEST@Q})" >> .env
               TAGS+=(--tag "${LATEST}")
+
+              # Stable environments go to both private and public
+              if "${PUSH_TO_PUBLIC}" ; then
+                  LATEST="${IMAGE_URI_PUBLIC}:latest"
+                  echo "BUILDS+=(${LATEST@Q})" >> .env
+                  TAGS+=(--tag "${LATEST}")
+              fi
           else
-              echo "latest tag not required"
+              echo "The 'latest' tag is not required"
           fi
+
           set -x
           docker build "${BUILD_ARGS[@]}" "${TAGS[@]}" .
+          set +x
+
+          # Once the build succeeds, we create the required tags as appropriate
+          export REPO_TAG=""
+          if [ "${TRIGGER}" == "nightly" ] ; then
+              REPO_TAG="nightly/${BUILD_VERSION}/${NIGHTLY_STAMP}"
+          elif [ "${ENVIRONMENT}" == "stable" ] ; then
+              REPO_TAG="release/${BUILD_VERSION}"
+          fi
+
+          # If we want to tag the repository, do so
+          # ... will this work?
+          if [ -n "${REPO_TAG}" ] ; then
+              git tag "${REPO_TAG}"
+              git push --tags
+          fi
 
       - name: Create ECR Repo
         run: |
           source .env
+          # Short circuit, if requested
+          [ -v SHORT_CIRCUIT ] && "${SHORT_CIRCUIT}" && exit 0
 
           echo "We are creating an image for the ${GITHUB_REPOSITORY}@${ENVIRONMENT}. This is based off of the repository name and Git branch."
           echo "We try creating this even if the repo exists, so errors to that note will not create failures of the workflow."
+
+          # All images have private repositories
           aws ecr create-repository \
-             --region "${ECR_AWS_REGION}" \
              --repository-name "${IMAGE_URI}" \
+             --region "${ECR_AWS_REGION}" \
              --image-tag-mutability MUTABLE \
              --image-scanning-configuration scanOnPush=true  \
              --encryption-configuration encryptionType="AES256" || true
 
+          if "${PUSH_TO_PUBLIC}" ; then
+              aws ecr-public create-repository \
+                 --repository-name "${IMAGE_URI}" \
+                 --region "${ECR_AWS_REGION}"
+          fi
+
       - name: Create Access Permissions
         run: |
           source .env
+          # Short circuit, if requested
+          [ -v SHORT_CIRCUIT ] && "${SHORT_CIRCUIT}" && exit 0
+
           cat << POL_STATEMENT > ecr_read_policy.json
           {
             "Version": "2012-10-17",
@@ -240,6 +373,9 @@ jobs:
       - name: Update Repository Permissions
         run: |
           source .env
+          # Short circuit, if requested
+          [ -v SHORT_CIRCUIT ] && "${SHORT_CIRCUIT}" && exit 0
+
           echo "${IMAGE_URI}"
           aws ecr set-repository-policy \
           --region "${ECR_AWS_REGION}" \
@@ -248,6 +384,10 @@ jobs:
 
       - name: Create Lifecycle Policy
         run: |
+          source .env
+          # Short circuit, if requested
+          [ -v SHORT_CIRCUIT ] && "${SHORT_CIRCUIT}" && exit 0
+
           cat << LIFECYCLE_STATEMENT > ecr_lifecycle_policy.json
           {
             "rules": [
@@ -270,6 +410,9 @@ jobs:
       - name: Update Repository Lifecycle Policy
         run: |
           source .env
+          # Short circuit, if requested
+          [ -v SHORT_CIRCUIT ] && "${SHORT_CIRCUIT}" && exit 0
+
           cat ecr_lifecycle_policy.json
           aws ecr put-lifecycle-policy \
           --region "${ECR_AWS_REGION}" \
@@ -277,10 +420,11 @@ jobs:
           --lifecycle-policy-text file://ecr_lifecycle_policy.json
 
       - name: Publish Docker image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           source .env
+          # Short circuit, if requested
+          [ -v SHORT_CIRCUIT ] && "${SHORT_CIRCUIT}" && exit 0
+
           # Iterate over the array of built artifacts, and push them
           for BUILD in "${BUILDS[@]}" ; do
               docker push "${BUILD}"
