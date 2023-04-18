@@ -20,6 +20,7 @@ on:
 env:
   ECR_AWS_REGION: ${{ secrets.ECR_AWS_REGION }}
   ECR_AWS_ORG_ID: ${{ secrets.ECR_AWS_ORG_ID }}
+  GH_TOKEN: ${{ github.token }}
 
 jobs:
   ECR-Publishing:
@@ -67,8 +68,6 @@ jobs:
       - name: Identify the type of job being run
         run: |
           # Check to see the project's visibility
-          echo "Repo private:"
-          gh repo view --json isPrivate --jq .isPrivate
           export PRIVATE="$(gh repo view --json isPrivate --jq .isPrivate)"
           export VISIBILITY="private"
           "${PRIVATE}" || VISIBILITY="public"
