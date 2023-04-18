@@ -402,9 +402,9 @@ jobs:
 
           echo "${IMAGE_URI}"
           aws ecr set-repository-policy \
-          --region "${ECR_AWS_REGION}" \
-          --repository-name "${IMAGE_URI}" \
-          --policy-text file://ecr_read_policy.json
+              --region "${ECR_AWS_REGION}" \
+              --repository-name "${IMAGE_URI}" \
+              --policy-text file://ecr_read_policy.json
 
       - name: Create Lifecycle Policy
         run: |
@@ -439,9 +439,9 @@ jobs:
 
           cat ecr_lifecycle_policy.json
           aws ecr put-lifecycle-policy \
-          --region "${ECR_AWS_REGION}" \
-          --repository-name "${IMAGE_URI}" \
-          --lifecycle-policy-text file://ecr_lifecycle_policy.json
+              --region "${ECR_AWS_REGION}" \
+              --repository-name "${IMAGE_URI}" \
+              --lifecycle-policy-text file://ecr_lifecycle_policy.json
 
       - name: Publish Docker image
         run: |
