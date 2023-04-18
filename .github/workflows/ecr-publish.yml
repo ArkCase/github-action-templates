@@ -67,6 +67,8 @@ jobs:
       - name: Identify the type of job being run
         run: |
           # Check to see the project's visibility
+          echo "Repo private:"
+          gh repo view --json isPrivate --jq .isPrivate
           export PRIVATE="$(gh repo view --json isPrivate --jq .isPrivate)"
           export VISIBILITY="private"
           "${PRIVATE}" || VISIBILITY="public"
