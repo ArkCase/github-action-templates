@@ -185,7 +185,7 @@ jobs:
               eval export "${PREFIX}PRIVATE_REGISTRY=${ECR_REGISTRY_PRIVATE@Q}"
               source <(
                   perl -pe "s/\\\s*$//" Dockerfile | \
-                      egrep '^[[:space:]]*ARG[[:space:]]+[^=]+=' \
+                      egrep '^[[:space:]]*ARG[[:space:]]+[^=]+=' | \
                       sed -e "s;\${;\$\{${PREFIX};g" \
                           -e "s;\$\([^{]\);\$${PREFIX}\1;g" | \
                       sed -e "s;^\s*ARG\s;export ${PREFIX};g"
