@@ -68,8 +68,8 @@ jobs:
         run: |
           # Check to see the project's visibility
           export PRIVATE="$(gh repo view --json isPrivate --jq .isPrivate)"
-          export VISIBILITY="public"
-          "${PRIVATE}" && VISIBILITY="private"
+          export VISIBILITY="private"
+          "${PRIVATE}" || VISIBILITY="public"
           echo "export VISIBILITY=${VISIBILITY@Q}" >> .env
 
           # Is this a push event, or a scheduled event?
