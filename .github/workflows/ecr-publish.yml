@@ -453,5 +453,6 @@ jobs:
 
           # Iterate over the array of built artifacts, and push them
           for BUILD in "${BUILDS[@]}" ; do
+              echo "Pushing [${BUILD}] ..."
               docker push "${BUILD}"
           done
