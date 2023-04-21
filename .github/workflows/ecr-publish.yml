@@ -305,7 +305,7 @@ jobs:
           # If we want to tag the repository, do so
           # ... will this work?
           if [ -n "${REPO_TAG}" ] ; then
-              git tag "${REPO_TAG}"
+              git tag --force "${REPO_TAG}"
               git push --tags
           fi
 
