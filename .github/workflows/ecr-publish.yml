@@ -306,7 +306,7 @@ jobs:
           # ... will this work?
           if [ -n "${REPO_TAG}" ] ; then
               git tag --force "${REPO_TAG}"
-              git push --tags
+              git push --force --tags
           fi
 
       - name: Create Private ECR Repo
