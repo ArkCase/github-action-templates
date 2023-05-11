@@ -169,7 +169,7 @@ jobs:
 
           # Parse out the tag, handle the case when it's not there
           export BUILD_VERSION="$(
-              set -euo pipefail
+              set -eo pipefail
 
               # Parsing out the version from the "VER" argument can be tricky if it's computed from others
               # values or arguments, so let's try it with some sneaky trickery.
