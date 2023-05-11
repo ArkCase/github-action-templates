@@ -125,6 +125,7 @@ jobs:
               [ "${VISIBILITY}" == "public" ] && PUSH_TO_PUBLIC="true"
           fi
           echo "export PUSH_TO_PUBLIC=${PUSH_TO_PUBLIC@Q}" >> .env
+          echo "PUSH_TO_PUBLIC=${PUSH_TO_PUBLIC@Q}"
 
       - name: Indentify the image repo being built
         run: |
@@ -157,6 +158,7 @@ jobs:
           # IMAGE_URI+="/${ENVIRONMENT}"
           IMAGE_URI+="/${IMAGE_NAME}"
           echo "export IMAGE_URI=${IMAGE_URI@Q}" >> .env
+          echo "IMAGE_URI=${IMAGE_URI@Q}"
 
       - name: Indentify the image version being built
         env:
@@ -209,6 +211,7 @@ jobs:
           )"
           [ -n "${BUILD_VERSION}" ] || BUILD_VERSION="latest"
           echo "export BUILD_VERSION=${BUILD_VERSION@Q}" >> .env
+          echo "BUILD_VERSION=${BUILD_VERSION@Q}"
 
       - name: Build Docker image
         env:
