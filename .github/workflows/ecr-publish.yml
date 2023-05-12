@@ -209,6 +209,8 @@ jobs:
                   [ -v "${C}" ] && [ -n "${!C}" ] && echo -n "${!C}" && break
               done
           )"
+          RC=${?}
+          [ ${RC} -eq 0 ] || exit ${RC}
           [ -n "${BUILD_VERSION}" ] || BUILD_VERSION="latest"
           echo "export BUILD_VERSION=${BUILD_VERSION@Q}" >> .env
           echo "BUILD_VERSION=${BUILD_VERSION@Q}"
