@@ -186,7 +186,7 @@ jobs:
               # BASH variables which can cause the task to fail, and we use special SED strings to add the
               # prefix as necessary for variable expansion among the arguments themselves
               export PREFIX="____DOCKER_ARG____"
-              export BLD_VAR="${PREFIX}_BLD"
+              export BLD_VAR="${PREFIX}BLD"
               # It's OK to define this here ... if it gets overridden below, we're happy about it. Otherwise,
               # we fall back to this value.
               eval export "${PREFIX}PRIVATE_REGISTRY=${ECR_REGISTRY_PRIVATE@Q}"
