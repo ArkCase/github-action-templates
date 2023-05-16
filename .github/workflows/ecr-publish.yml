@@ -169,6 +169,9 @@ jobs:
           # Short circuit, if requested
           [ -v SHORT_CIRCUIT ] && "${SHORT_CIRCUIT}" && exit 0
 
+          # TODO: Get all the release tags, and parse out the build number to identify
+          # the next available one?
+
           # Parse out the tag, handle the case when it's not there
           export BUILD_VERSION="$(
               set -eo pipefail
@@ -183,6 +186,7 @@ jobs:
               # BASH variables which can cause the task to fail, and we use special SED strings to add the
               # prefix as necessary for variable expansion among the arguments themselves
               export PREFIX="____DOCKER_ARG____"
+              export BLD_VAR="${PREFIX}_BLD"
               # It's OK to define this here ... if it gets overridden below, we're happy about it. Otherwise,
               # we fall back to this value.
               eval export "${PREFIX}PRIVATE_REGISTRY=${ECR_REGISTRY_PRIVATE@Q}"
@@ -193,6 +197,11 @@ jobs:
                           -e "s;\$\([^{]\);\$${PREFIX}\1;g" | \
                       sed -e "s;^\s*ARG\s;export ${PREFIX};g"
               )
+
+              export BLD_TAG=""
+              if [ -v "${BLD_VAR}" ] && [ -n "${!BLD_VAR}" ] ; then
+                  BLD_TAG="-${!BLD_VAR}"
+              fi
 
               CANDIDATES=()
               CANDIDATES+=("VER")
@@ -206,7 +215,7 @@ jobs:
                   [ -z "${PREFIX}" ] || C="${PREFIX}${C}"
                   # This checks to see if the candidate is defined, and if it has a non-blank
                   # value. If both are met, then its value is output, and the loop is broken
-                  [ -v "${C}" ] && [ -n "${!C}" ] && echo -n "${!C}" && break
+                  [ -v "${C}" ] && [ -n "${!C}" ] && echo -n "${!C}${BLD_TAG}" && break
               done
           )"
           RC=${?}
