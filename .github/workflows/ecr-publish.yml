@@ -18,11 +18,11 @@ on:
         required: false
       CURL_ENCRYPTION_KEY:
         required: false
+      CURL_AUTH_FILE:
+        required: false
       CURL_USERNAME:
         required: false
       CURL_PASSWORD:
-        required: false
-      CURL_AUTH_FILE:
         required: false
 
 env:
@@ -240,6 +240,10 @@ jobs:
           ECR_AWS_REGION: ${{ secrets.ECR_AWS_REGION }}
           ECR_AWS_ACCESS_KEY: ${{ secrets.ECR_AWS_ACCESS_KEY }}
           ECR_AWS_SECRET_ACCESS_KEY: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
+          CURL_ENCRYPTION_KEY: ${{ secrets.CURL_ENCRYPTION_KEY }}
+          CURL_AUTH_FILE: ${{ secrets.CURL_AUTH_FILE }}
+          CURL_USERNAME: ${{ secrets.CURL_USERNAME }}
+          CURL_PASSWORD: ${{ secrets.CURL_PASSWORD }}
         run: |
           source .env
           # Short circuit, if requested
