@@ -16,6 +16,14 @@ on:
         required: false
       ALF_QUAY_IO_PASSWORD:
         required: false
+      CURL_ENCRYPTION_KEY:
+        required: false
+      CURL_USERNAME:
+        required: false
+      CURL_PASSWORD:
+        required: false
+      CURL_AUTH_FILE:
+        required: false
 
 env:
   ECR_AWS_REGION: ${{ secrets.ECR_AWS_REGION }}
