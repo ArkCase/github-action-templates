@@ -68,6 +68,7 @@ jobs:
       - name: Identify the type of job being run
         run: |
           # Check to see the project's visibility
+          # TODO: CHECK THE DOCKERFILE FOR A REQUEST (ARG) TO KEEP THE BUILD PRIVATE
           export PRIVATE="$(gh repo view --json isPrivate --jq .isPrivate)"
           export VISIBILITY="private"
           "${PRIVATE}" || VISIBILITY="public"
@@ -261,6 +262,9 @@ jobs:
           BUILD_ARGS+=(--build-arg "AWS_ACCESS_KEY_ID=${ECR_AWS_ACCESS_KEY}")
           BUILD_ARGS+=(--build-arg "AWS_SECRET_ACCESS_KEY=${ECR_AWS_SECRET_ACCESS_KEY}")
           BUILD_ARGS+=(--build-arg "AWS_REGION=${ECR_AWS_REGION}")
+          for VAR in "${!CURL_@}" ; do
+              BUILD_ARGS+=(--build-arg "${VAR}=${!VAR}")
+          done
           BUILD_ARGS+=(--label "GIT_REPOSITORY=${GITHUB_REPOSITORY}")
           BUILD_ARGS+=(--label "GIT_BRANCH=${GITHUB_REF_NAME}")
           BUILD_ARGS+=(--label "GIT_COMMIT=${GITHUB_SHA}")
