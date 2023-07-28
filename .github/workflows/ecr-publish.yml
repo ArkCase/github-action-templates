@@ -308,9 +308,9 @@ jobs:
               echo "The 'latest' tag is not required"
           fi
 
-          set -x
+          # set -x
           docker build "${BUILD_ARGS[@]}" "${TAGS[@]}" .
-          set +x
+          # set +x
 
           # Once the build succeeds, we create the required tags as appropriate
           export REPO_TAG=""
