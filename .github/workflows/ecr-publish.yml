@@ -24,6 +24,12 @@ on:
         required: false
       CURL_PASSWORD:
         required: false
+      MVN_GET_ENCRYPTION_KEY:
+        required: false
+      MVN_GET_USERNAME:
+        required: false
+      MVN_GET_PASSWORD:
+        required: false
 
 env:
   ECR_AWS_REGION: ${{ secrets.ECR_AWS_REGION }}
@@ -244,6 +250,10 @@ jobs:
           CURL_AUTH_FILE: ${{ secrets.CURL_AUTH_FILE }}
           CURL_USERNAME: ${{ secrets.CURL_USERNAME }}
           CURL_PASSWORD: ${{ secrets.CURL_PASSWORD }}
+          MVN_GET_ENCRYPTION_KEY: ${{ secrets.MVN_GET_ENCRYPTION_KEY }}
+          MVN_GET_AUTH_FILE: ${{ secrets.MVN_GET_AUTH_FILE }}
+          MVN_GET_USERNAME: ${{ secrets.MVN_GET_USERNAME }}
+          MVN_GET_PASSWORD: ${{ secrets.MVN_GET_PASSWORD }}
         run: |
           source .env
           # Short circuit, if requested
@@ -252,7 +262,6 @@ jobs:
           export TAG="${BUILD_VERSION}"
           export NIGHTLY_STAMP=""
           if [ "${TRIGGER}" == "nightly" ] ; then
-              # NIGHTLY_STAMP="$(date -u +%Y%m%d)"
               NIGHTLY_STAMP="$(date -u +%Y%m%d-%H%M%S)"
               TAG="nightly-${NIGHTLY_STAMP}-${TAG}"
           else
@@ -274,12 +283,15 @@ jobs:
           BUILD_ARGS+=(--build-arg "AWS_ACCESS_KEY_ID=${ECR_AWS_ACCESS_KEY}")
           BUILD_ARGS+=(--build-arg "AWS_SECRET_ACCESS_KEY=${ECR_AWS_SECRET_ACCESS_KEY}")
           BUILD_ARGS+=(--build-arg "AWS_REGION=${ECR_AWS_REGION}")
-          for VAR in "${!CURL_@}" ; do
+          for VAR in "${!CURL_@}" "${!MVN_GET_@}" ; do
               BUILD_ARGS+=(--build-arg "${VAR}=${!VAR}")
           done
           BUILD_ARGS+=(--label "GIT_REPOSITORY=${GITHUB_REPOSITORY}")
-          BUILD_ARGS+=(--label "GIT_BRANCH=${GITHUB_REF_NAME}")
+          BUILD_ARGS+=(--label "GIT_REF=${GITHUB_REF_NAME}")
+          BUILD_ARGS+=(--label "GIT_REF_TYPE=${GITHUB_REF_TYPE}")
           BUILD_ARGS+=(--label "GIT_COMMIT=${GITHUB_SHA}")
+          COMMIT_COUNT="$(git rev-list --count HEAD)"
+          BUILD_ARGS+=(--label "GIT_COMMIT_COUNT=${COMMIT_COUNT}")
 
           export IMAGE_URI_PRIVATE="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}"
           echo "export IMAGE_URI_PRIVATE=${IMAGE_URI_PRIVATE@Q}" >> .env
