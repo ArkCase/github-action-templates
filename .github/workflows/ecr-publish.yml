@@ -17,7 +17,7 @@ on:
         required: true
       ECR_AWS_SECRET_ACCESS_KEY:
         required: true
-      ALF_QUAY_IO_USER:
+      ALF_QUAY_IO_USERNAME:
         required: false
       ALF_QUAY_IO_PASSWORD:
         required: false
@@ -84,18 +84,19 @@ jobs:
 
       - name: Docker Login to Alfresco Quay.IO (if applicable)
         env:
-          ALF_QUAY_IO_USER: ${{ secrets.ALF_QUAY_IO_USER }}
+          ALF_QUAY_IO_USERNAME: ${{ secrets.ALF_QUAY_IO_USERNAME }}
           ALF_QUAY_IO_PASSWORD: ${{ secrets.ALF_QUAY_IO_PASSWORD }}
         run: |
           source .env
           cat .env
 
-          if [ -v ALF_QUAY_IO_USER ] && [ -v ALF_QUAY_IO_PASSWORD ] && [ -n "${ALF_QUAY_IO_USER}" ] && [ -n "${ALF_QUAY_IO_PASSWORD}" ] ; then
-              docker login -u "${ALF_QUAY_IO_USER}" -p "${ALF_QUAY_IO_PASSWORD}" quay.io
+          if [ -v ALF_QUAY_IO_USERNAME ] && [ -v ALF_QUAY_IO_PASSWORD ] && [ -n "${ALF_QUAY_IO_USERNAME}" ] && [ -n "${ALF_QUAY_IO_PASSWORD}" ] ; then
+              docker login -u "${ALF_QUAY_IO_USERNAME}" -p "${ALF_QUAY_IO_PASSWORD}" quay.io
           else
-              echo "The quay.io credentials were either not given, or are insufficient. Will not authenticate."
-              [ -n "${ALF_QUAY_IO_USER}" ] && echo -e "\tUSERNAME: [$(echo -n "${ALF_QUAY_IO_USER}" | sha256sum)]"
-              [ -n "${ALF_QUAY_IO_PASSWORD}" ] && echo -e "\tPASSWORD: [$(echo -n "${ALF_QUAY_IO_PASSWORD}" | sha256sum)]"
+              [ -v ALF_QUAY_IO_USERNAME ] || [ -v ALF_QUAY_IO_PASSWORD ] && echo "These are the quay.io credentials given (sha256sum):"
+              [ -v ALF_QUAY_IO_USERNAME ] && echo -e "\tUSERNAME: [$(echo -n "${ALF_QUAY_IO_USERNAME}" | sha256sum)]"
+              [ -v ALF_QUAY_IO_PASSWORD ] && echo -e "\tPASSWORD: [$(echo -n "${ALF_QUAY_IO_PASSWORD}" | sha256sum)]"
+              echo "The quay.io credentials were insufficient. Will not authenticate."
           fi
 
         # The AWS login needs to happen before the build b/c the
