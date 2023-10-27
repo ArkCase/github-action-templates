@@ -94,6 +94,8 @@ jobs:
               docker login -u "${ALF_QUAY_IO_USER}" -p "${ALF_QUAY_IO_PASSWORD}" quay.io
           else
               echo "The quay.io credentials were either not given, or are insufficient. Will not authenticate."
+              echo -e "\tUSERNAME: [$(echo -n "${ALF_QUAY_IO_USER}" | sha256sum)]"
+              echo -e "\tPASSWORD: [$(echo -n "${ALF_QUAY_IO_PASSWORD}" | sha256sum)]"
           fi
 
         # The AWS login needs to happen before the build b/c the
