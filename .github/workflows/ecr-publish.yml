@@ -229,10 +229,6 @@ jobs:
           PRERELEASE="${BASH_REMATCH[5]}"
           METADATA="${BASH_REMATCH[8]}"
 
-          # If we have metadata, we append the build info with a dash
-          [ -n "${METADATA}" ] && METADATA+="-"
-          METADATA+="b${GITHUB_RUN_NUMBER}"
-
           # If the pre-release info is a "SNAPSHOT", make sure it's used properly
           REVISION_SNAPSHOT="false"
           if [[ "${PRERELEASE}" =~ SNAPSHOT ]] ; then
@@ -325,39 +321,54 @@ jobs:
           BUILD_ARGS+=(--label "GIT_COMMIT_COUNT=${COMMIT_COUNT}")
 
           #
-          # Select the tags to build
+          # These are the revisions that will be built
+          #    ${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}
+          #    ${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}_b${GITHUB_RUN_NUMBER}${REVISION_METADATA}
+          #    ${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}_b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}
           #
-          # For snapshots & test builds:
-          #    ${PRIVATE}:${REVISION_BASE_NUMBER}-${REVISION_PRERELEASE}
-          #    ${PRIVATE}:${REVISION_BASE_NUMBER}-${REVISION_PRERELEASE}_${REVISION_METADATA}-b${BUILD_NUMBER}
-          #    ${PRIVATE}:${REVISION_BASE_NUMBER}-${REVISION_PRERELEASE}_${REVISION_METADATA}-b${BUILD_NUMBER}-${TIMESTAMP}
+          # The ordering of components is important for detemining who gets
+          # the "latest" (or devel-latest) tag.
           #
-          # For release builds:
-          #    ${PRIVATE}:${REVISION_BASE_NUMBER}
-          #    ${PRIVATE}:${REVISION_BASE_NUMBER}_${REVISION_METADATA}-b${BUILD_NUMBER}
-          #    ${PRIVATE}:${REVISION_BASE_NUMBER}_${REVISION_METADATA}-b${BUILD_NUMBER}-${TIMESTAMP}
-          #    ${PUBLIC}:${REVISION_BASE_NUMBER}
-          #    ${PUBLIC}:${REVISION_BASE_NUMBER}_${REVISION_METADATA}-b${BUILD_NUMBER}
-          #    ${PUBLIC}:${REVISION_BASE_NUMBER}_${REVISION_METADATA}-b${BUILD_NUMBER}-${TIMESTAMP}
+          # The significance of components when comparing is:
+          #
+          #    * REVISION_BASE_NUMBER
+          #    * GITHUB_RUN_NUMBER
+          #    * TIMESTAMP
+          #    * REVISION_METADATA
+          #
+          # We don't take into account the pre-release stuff b/c those will never get tagged as
+          # "latest" because they're *pre-release* artifacts (this includes SNAPSHOT artifacts).
+          #
+          # This also applies to "devel" artifacts, since these aren't inteded to be public. However,
+          # we do have a "devel-latest" which can be useful.
           #
 
           # If we have a pre-release tag, pre-pend a dash
           [ -n "${REVISION_PRERELEASE}" ] && REVISION_PRERELEASE="-${REVISION_PRERELEASE}"
-          # If we have extra metadata, pre-pend a plus
-          [ -n "${REVISION_METADATA}" ] && REVISION_METADATA="_${REVISION_METADATA}"
 
-          # These are the revisions we will be building
-          REVISIONS=(
-              "${REVISION_PREFIX}${REVISION}"
-              "${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}${REVISION_METADATA}"
-              "${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}${REVISION_METADATA}-${TIMESTAMP}"
-          )
+          # This will house all the different revisions by which this
+          # artifact will be known
+          REVISIONS=()
+
+          # The first metadata must be appended with a leading underscore
+          REVISIONS+=("${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}${REVISION_METADATA:+_}${REVISION_METADATA}")
+
+          # For the other builds, if there's any metadata, it will need a dash up front
+          [ -n "${REVISION_METADATA}" ] && REVISION_METADATA="-${REVISION_METADATA}"
+
+          # This is an intermediate revision with a little more build metadata
+          REVISIONS+=("${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}_b${GITHUB_RUN_NUMBER}${REVISION_METADATA}")
+
+          # This is the most exact revision, which will be used for "latest" computation
+          LATEST_REVISION="${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}_b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
+          REVISIONS+=("${LATEST_REVISION}")
 
           TARGETS=()
           TARGETS+=("${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}")
           "${PUSH_TO_PUBLIC}" && TARGETS+=("${ECR_REGISTRY_PUBLIC}/${IMAGE_URI}")
 
-          # Set the build tags to be built
+          # Set the build tags to be built. Make sure to cover
+          # both targets if applicable
           TAGS=()
           echo "export BUILDS=()" >> .env
           for T in "${TARGETS[@]}" ; do
@@ -367,6 +378,75 @@ jobs:
                   TAGS+=(--tag "${BUILD}")
               done
           done
+
+          # We only compute the need for a "latest" tag if
+          # this is not a pre-release artifact.
+          if [ -z "${REVISION_PRERELEASE}" ] ; then
+              #
+              # Identify if we need to bear the tag of "latest" per the
+              # version precedence rules laid out above
+              #
+
+              # Since we know we won't have any pre-release stuff, we can
+              # construct this selector regex to not allow any pre-release
+              # information on the tags. We don't really care about metadata
+              # since it's the LAST component to be taken into account, and
+              # it most likely will never come into play since the timestamp
+              # will almost assuredly NEVER coincide.
+              RE_REVISION_SELECTOR="^${REVISION_PREFIX}[^-]+_b[0-9]+-[1-9][0-9]{13}"
+
+              # For re-use...
+              LATEST="${REVISION_PREFIX}latest"
+              LATEST_ADDED="false"
+
+              # First, check the private revisions, ingoring pre-release stuff
+              LATEST_PRV="$(
+                  (
+                      # We print out our latest revision so they get sorted properly
+                      # alongside all other revisions. This way the post-processing
+                      # sort+grep+head will yield the revision that should carry the
+                      # "latest" moniker
+                      echo "${LATEST_REVISION}"
+                      aws ecr describe-images --repository-name "${IMAGE_URI}" | \
+                          jq -r '.imageDetails[]| .imageTags // empty | .[]'
+                  ) | \
+                  egrep "${RE_REVISION_SELECTOR}" | \
+                  sort --reverse --version-sort --unique | \
+                  head -1
+              )"
+              if [ "${LATEST_PRV}" == "${LATEST_REVISION}" ] ; then
+                  BUILD="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${LATEST}"
+                  echo "BUILDS+=(${BUILD@Q})" >> .env
+                  TAGS+=(--tag "${BUILD}")
+                  "${LATEST_ADDED}" || REVISIONS+="${LATEST}"
+                  LATEST_ADDED="true"
+              fi
+
+              if "${PUSH_TO_PUBLIC}" ; then
+                  # Next, check the public one
+                  LATEST_PUB="$(
+                      (
+                          # We print out our latest revision so they get sorted properly
+                          # alongside all other revisions. This way the post-processing
+                          # sort+grep+head will yield the revision that should carry the
+                          # "latest" moniker
+                          echo "${LATEST_REVISION}"
+                          aws ecr-public describe-images --repository-name "${IMAGE_NAME}" | \
+                              jq -r '.imageDetails[]| .imageTags // empty | .[]'
+                      ) | \
+                      egrep "${RE_REVISION_SELECTOR}" | \
+                      sort --reverse --version-sort --unique | \
+                      head -1
+                  )"
+                  if [ "${LATEST_PUB}" == "${LATEST_REVISION}" ] ; then
+                      BUILD="${ECR_REGISTRY_PUBLIC}/${IMAGE_URI}:${LATEST}"
+                      echo "BUILDS+=(${BUILD@Q})" >> .env
+                      TAGS+=(--tag "${BUILD}")
+                      "${LATEST_ADDED}" || REVISIONS+="${LATEST}"
+                      LATEST_ADDED="true"
+                  fi
+              fi
+          fi
 
           set -x
           docker build "${BUILD_ARGS[@]}" "${TAGS[@]}" .
