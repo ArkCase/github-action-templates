@@ -66,7 +66,7 @@ jobs:
           TIMESTAMP="$(date -u +%Y%m%d%H%M%S)"
           echo "export TIMESTAMP=${TIMESTAMP@Q}" >> .env
           echo "TIMESTAMP=${TIMESTAMP@Q}"
-          [ -f .env ] || { find | sort ; exit 1 ; }
+          find | sort
 
       - name: Checkout source code
         uses: actions/checkout@v3
