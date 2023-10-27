@@ -66,8 +66,7 @@ jobs:
           TIMESTAMP="$(date -u +%Y%m%d%H%M%S)"
           echo "export TIMESTAMP=${TIMESTAMP@Q}" >> .env
           echo "TIMESTAMP=${TIMESTAMP@Q}"
-          P="$(base64 <<< "${PWD}")"
-          echo "P=[${P}]"
+          [ -f .env ] || { find | sort ; exit 1 ; }
 
       - name: Checkout source code
         uses: actions/checkout@v3
@@ -85,8 +84,7 @@ jobs:
           ALF_QUAY_IO_USER: ${{ secrets.ALF_QUAY_IO_USER }}
           ALF_QUAY_IO_PASSWORD: ${{ secrets.ALF_QUAY_IO_PASSWORD }}
         run: |
-          P="$(base64 <<< "${PWD}")"
-          echo "P=[${P}]"
+          [ -f .env ] || { find | sort ; exit 1 ; }
           source .env
           cat .env
 
