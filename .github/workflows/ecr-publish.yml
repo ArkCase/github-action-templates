@@ -57,17 +57,6 @@ jobs:
               fi
           fi
 
-          # Start with a clean environment
-          : > .env
-
-          echo "export ARM_REVISION=${ARM_REVISION@Q}" >> .env
-          echo "ARM_REVISION=${ARM_REVISION@Q}"
-
-          TIMESTAMP="$(date -u +%Y%m%d%H%M%S)"
-          echo "export TIMESTAMP=${TIMESTAMP@Q}" >> .env
-          echo "TIMESTAMP=${TIMESTAMP@Q}"
-          find | sort
-
       - name: Checkout source code
         uses: actions/checkout@v3
 
@@ -79,12 +68,25 @@ jobs:
           aws-region: ${{ secrets.ECR_AWS_REGION }}
           mask-aws-account-id: ${{ secrets.ECR_AWS_ACCOUNT_ID }}
 
+      - name: Initialize the environment file
+        env:
+          ARM_REVISION: ${{ inputs.revision }}
+        run: |
+          # Start with a clean environment
+          : > .env
+
+          echo "export ARM_REVISION=${ARM_REVISION@Q}" >> .env
+          echo "ARM_REVISION=${ARM_REVISION@Q}"
+
+          TIMESTAMP="$(date -u +%Y%m%d%H%M%S)"
+          echo "export TIMESTAMP=${TIMESTAMP@Q}" >> .env
+          echo "TIMESTAMP=${TIMESTAMP@Q}"
+
       - name: Docker Login to Alfresco Quay.IO (if applicable)
         env:
           ALF_QUAY_IO_USER: ${{ secrets.ALF_QUAY_IO_USER }}
           ALF_QUAY_IO_PASSWORD: ${{ secrets.ALF_QUAY_IO_PASSWORD }}
         run: |
-          [ -f .env ] || { find | sort ; exit 1 ; }
           source .env
           cat .env
 
