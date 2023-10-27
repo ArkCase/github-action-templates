@@ -342,7 +342,7 @@ jobs:
           # If we have a pre-release tag, pre-pend a dash
           [ -n "${REVISION_PRERELEASE}" ] && REVISION_PRERELEASE="-${REVISION_PRERELEASE}"
           # If we have extra metadata, pre-pend a plus
-          [ -n "${REVISION_METADATA}" ] && REVISION_METADATA="+${REVISION_METADATA}"
+          [ -n "${REVISION_METADATA}" ] && REVISION_METADATA="_${REVISION_METADATA}"
 
           # These are the revisions we will be building
           REVISIONS=(
