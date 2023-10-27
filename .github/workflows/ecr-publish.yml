@@ -394,6 +394,7 @@ jobs:
               # it most likely will never come into play since the timestamp
               # will almost assuredly NEVER coincide.
               RE_REVISION_SELECTOR="^${REVISION_PREFIX}[^-]+_b[0-9]+-[1-9][0-9]{13}"
+              JQ_FIND_IMAGE_TAGS='.imageDetails[] | select(has("imageTags")) | .imageTags[]'
 
               # For re-use...
               LATEST="${REVISION_PREFIX}latest"
@@ -408,7 +409,7 @@ jobs:
                       # "latest" moniker
                       echo "${LATEST_REVISION}"
                       aws ecr describe-images --repository-name "${IMAGE_URI}" | \
-                          jq -r '.imageDetails[]| .imageTags // empty | .[]'
+                          jq -r "${JQ_FIND_IMAGE_TAGS}"
                   ) | \
                   egrep "${RE_REVISION_SELECTOR}" | \
                   sort --reverse --version-sort --unique | \
@@ -432,7 +433,7 @@ jobs:
                           # "latest" moniker
                           echo "${LATEST_REVISION}"
                           aws ecr-public describe-images --repository-name "${IMAGE_NAME}" | \
-                              jq -r '.imageDetails[]| .imageTags // empty | .[]'
+                              jq -r "${JQ_FIND_IMAGE_TAGS}"
                       ) | \
                       egrep "${RE_REVISION_SELECTOR}" | \
                       sort --reverse --version-sort --unique | \
