@@ -144,7 +144,9 @@ jobs:
           esac
 
           echo "export PRODUCT_SUITE=${PRODUCT_SUITE@Q}" >> .env
+          echo "PRODUCT_SUITE=${PRODUCT_SUITE@Q}"
           echo "export IMAGE_NAME=${IMAGE_NAME@Q}" >> .env
+          echo "IMAGE_NAME=${IMAGE_NAME@Q}"
 
           export IMAGE_URI="${PRODUCT_SUITE}/${IMAGE_NAME}"
           echo "export IMAGE_URI=${IMAGE_URI@Q}" >> .env
@@ -327,16 +329,16 @@ jobs:
           #
           # For snapshots & test builds:
           #    ${PRIVATE}:${REVISION_BASE_NUMBER}-${REVISION_PRERELEASE}
-          #    ${PRIVATE}:${REVISION_BASE_NUMBER}-${REVISION_PRERELEASE}+${REVISION_METADATA}-b${BUILD_NUMBER}
-          #    ${PRIVATE}:${REVISION_BASE_NUMBER}-${REVISION_PRERELEASE}+${REVISION_METADATA}-b${BUILD_NUMBER}-${TIMESTAMP}
+          #    ${PRIVATE}:${REVISION_BASE_NUMBER}-${REVISION_PRERELEASE}_${REVISION_METADATA}-b${BUILD_NUMBER}
+          #    ${PRIVATE}:${REVISION_BASE_NUMBER}-${REVISION_PRERELEASE}_${REVISION_METADATA}-b${BUILD_NUMBER}-${TIMESTAMP}
           #
           # For release builds:
           #    ${PRIVATE}:${REVISION_BASE_NUMBER}
-          #    ${PRIVATE}:${REVISION_BASE_NUMBER}+${REVISION_METADATA}-b${BUILD_NUMBER}
-          #    ${PRIVATE}:${REVISION_BASE_NUMBER}+${REVISION_METADATA}-b${BUILD_NUMBER}-${TIMESTAMP}
+          #    ${PRIVATE}:${REVISION_BASE_NUMBER}_${REVISION_METADATA}-b${BUILD_NUMBER}
+          #    ${PRIVATE}:${REVISION_BASE_NUMBER}_${REVISION_METADATA}-b${BUILD_NUMBER}-${TIMESTAMP}
           #    ${PUBLIC}:${REVISION_BASE_NUMBER}
-          #    ${PUBLIC}:${REVISION_BASE_NUMBER}+${REVISION_METADATA}-b${BUILD_NUMBER}
-          #    ${PUBLIC}:${REVISION_BASE_NUMBER}+${REVISION_METADATA}-b${BUILD_NUMBER}-${TIMESTAMP}
+          #    ${PUBLIC}:${REVISION_BASE_NUMBER}_${REVISION_METADATA}-b${BUILD_NUMBER}
+          #    ${PUBLIC}:${REVISION_BASE_NUMBER}_${REVISION_METADATA}-b${BUILD_NUMBER}-${TIMESTAMP}
           #
 
           # If we have a pre-release tag, pre-pend a dash
