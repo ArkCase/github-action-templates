@@ -66,6 +66,7 @@ jobs:
           TIMESTAMP="$(date -u +%Y%m%d%H%M%S)"
           echo "export TIMESTAMP=${TIMESTAMP@Q}" >> .env
           echo "TIMESTAMP=${TIMESTAMP@Q}"
+          echo "PWD=[${PWD}]"
 
       - name: Checkout source code
         uses: actions/checkout@v3
@@ -83,6 +84,7 @@ jobs:
           ALF_QUAY_IO_USER: ${{ secrets.ALF_QUAY_IO_USER }}
           ALF_QUAY_IO_PASSWORD: ${{ secrets.ALF_QUAY_IO_PASSWORD }}
         run: |
+          echo "PWD=[${PWD}]"
           source .env
           cat .env
 
