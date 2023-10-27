@@ -51,7 +51,7 @@ jobs:
         run: |
           if [ -n "${ARM_REVISION}" ] ; then
               # Parse for vailidity ... we'll examine it more closely later
-              if [[ ! "${ARM_REVISION}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)+)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
+              if [[ ! "${ARM_REVISION}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
                   echo "Revision number is not valid: [${ARM_REVISION}]"
                   exit 1
               fi
@@ -218,7 +218,7 @@ jobs:
           #     * More than 3 dot-separated components are allowed on the version number
           #
           # Otherwise, the rest is the same: same rules for pre-release tags and metadata tags.
-          if [[ ! "${REVISION}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)+)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
+          if [[ ! "${REVISION}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
               echo "Revision number is not valid: [${REVISION}]"
               exit 1
           fi
