@@ -353,6 +353,9 @@ jobs:
           # artifact will be known
           REVISIONS=()
 
+          # NOTE: we use "_" instead of "+" as the revision metadata
+          # separator here b/c the plus sign is not permitted in Docker tags
+
           # The first metadata must be appended with a leading underscore
           REVISIONS+=("${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}${REVISION_METADATA:+_}${REVISION_METADATA}")
 
@@ -422,7 +425,7 @@ jobs:
                   BUILD="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${LATEST}"
                   echo "BUILDS+=(${BUILD@Q})" >> .env
                   TAGS+=(--tag "${BUILD}")
-                  "${LATEST_ADDED}" || REVISIONS+="${LATEST}"
+                  "${LATEST_ADDED}" || REVISIONS+=("${LATEST}")
                   LATEST_ADDED="true"
               fi
 
@@ -446,7 +449,7 @@ jobs:
                       BUILD="${ECR_REGISTRY_PUBLIC}/${IMAGE_URI}:${LATEST}"
                       echo "BUILDS+=(${BUILD@Q})" >> .env
                       TAGS+=(--tag "${BUILD}")
-                      "${LATEST_ADDED}" || REVISIONS+="${LATEST}"
+                      "${LATEST_ADDED}" || REVISIONS+=("${LATEST}")
                       LATEST_ADDED="true"
                   fi
               fi
@@ -467,7 +470,8 @@ jobs:
 
           # If we want to tag the repository, do so! Clobber any existing tags!
           for R in "${REVISIONS[@]}" ; do
-              git tag --force "${PREFIX}/${R}"
+              # Tags for GIT must be the *real* revision, with "+" instead of "_"
+              git tag --force "${PREFIX}/${R//_/+}"
           done
           git push --force --tags
 
