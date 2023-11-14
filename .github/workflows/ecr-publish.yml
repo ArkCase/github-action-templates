@@ -172,9 +172,13 @@ jobs:
                   # BASH variables which can cause the task to fail, and we use special SED strings to add the
                   # prefix as necessary for variable expansion among the arguments themselves
                   export PREFIX="____DOCKER_ARG____"
-                  # It's OK to define this here ... if it gets overridden below, we're happy about it. Otherwise,
-                  # we fall back to this value.
+
+                  # It's OK to define these here ... if they get overridden below, we're happy about it.
+                  # Otherwise, we fall back to these values to avoid failing the parse.
                   eval export "${PREFIX}PRIVATE_REGISTRY=${ECR_REGISTRY_PRIVATE@Q}"
+                  eval export "${PREFIX}PUBLIC_REGISTRY=${ECR_REGISTRY_PUBLIC@Q}"
+                  eval export "${PREFIX}BASE_REGISTRY=${ECR_REGISTRY_PRIVATE@Q}"
+
                   source <(
                       perl -pe "s/\\\s*$//" Dockerfile | \
                           egrep '^[[:space:]]*ARG[[:space:]]+[^=]+=' | \
@@ -301,6 +305,12 @@ jobs:
           # Select the base registries
           BUILD_ARGS+=(--build-arg "PRIVATE_REGISTRY=${ECR_REGISTRY_PRIVATE}")
           BUILD_ARGS+=(--build-arg "PUBLIC_REGISTRY=${ECR_REGISTRY_PUBLIC}")
+
+          # Select which one is the BASE registry, based on whether this
+          # container is to be pushed to public or not
+          BASE_REGISTRY="${ECR_REGISTRY_PRIVATE}"
+          "${PUSH_TO_PUBLIC}" && BASE_REGISTRY="${ECR_REGISTRY_PUBLIC}"
+          BUILD_ARGS+=(--build-arg "BASE_REGISTRY=${BASE_REGISTRY}")
 
           # Next, add all the stuff S3 will need to pull crap
           BUILD_ARGS+=(--build-arg "AWS_ACCESS_KEY_ID=${ECR_AWS_ACCESS_KEY}")
