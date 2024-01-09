@@ -382,7 +382,7 @@ I=0
             BUILD="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${LATEST}"
             echo "BUILDS+=(${BUILD@Q})" >> .env
             TAGS+=(--tag "${BUILD}")
-            "${LATEST_ADDED}" || REVISIONS+="${LATEST}"
+            "${LATEST_ADDED}" || REVISIONS+=("${LATEST}")
             LATEST_ADDED="true"
         fi
 
@@ -406,7 +406,7 @@ I=0
                 BUILD="${ECR_REGISTRY_PUBLIC}/${IMAGE_URI}:${LATEST}"
                 echo "BUILDS+=(${BUILD@Q})" >> .env
                 TAGS+=(--tag "${BUILD}")
-                "${LATEST_ADDED}" || REVISIONS+="${LATEST}"
+                "${LATEST_ADDED}" || REVISIONS+=("${LATEST}")
                 LATEST_ADDED="true"
             fi
         fi
