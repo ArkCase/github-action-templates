@@ -591,11 +591,54 @@ jobs:
             "rules": [
               {
                 "rulePriority": 100,
-                "description": "Keep only ten images, expire all others",
+                "description": "Keep untagged images only 1 day",
                 "selection": {
-                  "tagStatus": "any",
-                  "countType": "imageCountMoreThan",
-                  "countNumber": 10
+                  "tagStatus": "untagged",
+                  "countType": "sinceImagePushed",
+                  "countUnit": "days",
+                  "countNumber": 1
+                },
+                "action": {
+                  "type": "expire"
+                }
+              },
+              {
+                "rulePriority": 200,
+                "description": "Keep only the top-level SNAPSHOTS built in the past 30 days",
+                "selection": {
+                  "tagStatus": "tagged",
+                  "tagPatternList": [ "*-SNAPSHOT" ],
+                  "countType": "sinceImagePushed",
+                  "countUnit": "days",
+                  "countNumber": 30
+                },
+                "action": {
+                  "type": "expire"
+                }
+              },
+              {
+                "rulePriority": 300,
+                "description": "Keep only fresh-built SNAPSHOT tags that AREN'T the top-level SNAPSHOTs, pushed in the last 5 days",
+                "selection": {
+                  "tagStatus": "tagged",
+                  "tagPatternList": [ "*-SNAPSHOT_b*" ],
+                  "countType": "sinceImagePushed",
+                  "countUnit": "days",
+                  "countNumber": 5
+                },
+                "action": {
+                  "type": "expire"
+                }
+              },
+              {
+                "rulePriority": 400,
+                "description": "Keep only fresh-built devel-* tags that AREN'T the top-level SNAPSHOTs, pushed in the last 15 days",
+                "selection": {
+                  "tagStatus": "tagged",
+                  "tagPatternList": [ "devel-*" ],
+                  "countType": "sinceImagePushed",
+                  "countUnit": "days",
+                  "countNumber": 15
                 },
                 "action": {
                   "type": "expire"
