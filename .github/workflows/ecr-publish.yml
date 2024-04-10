@@ -6,6 +6,10 @@ on:
         description: "The revision number to use for construction (computed from the Dockerfile if not provided)"
         required: false
         type: string
+      arkcase:
+        description: "The ArkCase version to use for construction (computed from the Dockerfile if not provided)"
+        required: false
+        type: string
     secrets:
       ECR_AWS_REGION:
         required: true
@@ -47,12 +51,20 @@ jobs:
     steps:
       - name: Validate the parameters
         env:
-          ARM_REVISION: ${{ inputs.revision }}
+          PARAM_REVISION: ${{ inputs.revision }}
+          PARAM_ARKCASE: ${{ inputs.arkcase }}
         run: |
-          if [ -n "${ARM_REVISION}" ] ; then
+          if [ -n "${PARAM_REVISION}" ] ; then
               # Parse for vailidity ... we'll examine it more closely later
-              if [[ ! "${ARM_REVISION}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
-                  echo "Revision number is not valid: [${ARM_REVISION}]"
+              if [[ ! "${PARAM_REVISION}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
+                  echo "Revision number is not valid: [${PARAM_REVISION}]"
+                  exit 1
+              fi
+          fi
+          if [ -n "${PARAM_ARKCASE}" ] ; then
+              # Parse for vailidity ... we'll examine it more closely later
+              if [[ ! "${PARAM_ARKCASE}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
+                  echo "ArkCase version is not valid: [${PARAM_ARKCASE}]"
                   exit 1
               fi
           fi
@@ -70,17 +82,21 @@ jobs:
 
       - name: Initialize the environment file
         env:
-          ARM_REVISION: ${{ inputs.revision }}
+          PARAM_REVISION: ${{ inputs.revision }}
+          PARAM_ARKCASE: ${{ inputs.arkcase }}
         run: |
           # Start with a clean environment
           : > .env
 
-          echo "export ARM_REVISION=${ARM_REVISION@Q}" >> .env
-          echo "ARM_REVISION=${ARM_REVISION@Q}"
-
           TIMESTAMP="$(date -u +%Y%m%d%H%M%S)"
           echo "export TIMESTAMP=${TIMESTAMP@Q}" >> .env
           echo "TIMESTAMP=${TIMESTAMP@Q}"
+
+          echo "export PARAM_REVISION=${PARAM_REVISION@Q}" >> .env
+          echo "PARAM_REVISION=${PARAM_REVISION@Q}"
+
+          echo "export PARAM_ARKCASE=${PARAM_ARKCASE@Q}" >> .env
+          echo "PARAM_ARKCASE=${PARAM_ARKCASE@Q}"
 
       - name: Docker Login to Alfresco Quay.IO (if applicable)
         env:
@@ -94,8 +110,8 @@ jobs:
               docker login -u "${ALF_QUAY_IO_USERNAME}" -p "${ALF_QUAY_IO_PASSWORD}" quay.io
           else
               [ -v ALF_QUAY_IO_USERNAME ] || [ -v ALF_QUAY_IO_PASSWORD ] && echo "These are the quay.io credentials given (sha256sum):"
-              [ -v ALF_QUAY_IO_USERNAME ] && echo -e "\tUSERNAME: [$(echo -n "${ALF_QUAY_IO_USERNAME}" | sha256sum)]"
-              [ -v ALF_QUAY_IO_PASSWORD ] && echo -e "\tPASSWORD: [$(echo -n "${ALF_QUAY_IO_PASSWORD}" | sha256sum)]"
+              [ -v ALF_QUAY_IO_USERNAME ] && echo -e "\tUSERNAME: [$(echo -n "${ALF_QUAY_IO_USERNAME}" | sha256sum | awk '{ print $1 }')]"
+              [ -v ALF_QUAY_IO_PASSWORD ] && echo -e "\tPASSWORD: [$(echo -n "${ALF_QUAY_IO_PASSWORD}" | sha256sum | awk '{ print $1 }')]"
               echo "The quay.io credentials were insufficient. Will not authenticate."
           fi
 
@@ -115,7 +131,6 @@ jobs:
 
       - name: Identify the build's characteristics (visibility, version number, etc)
         env:
-          ARM_REVISION: ${{ inputs.revision }}
           ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
           ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
         run: |
@@ -156,10 +171,11 @@ jobs:
           echo "IMAGE_URI=${IMAGE_URI@Q}"
 
           # Make sure it's defined if it isn't already
-          REVISION="${ARM_REVISION}"
-          if [ -z "${REVISION}" ] ; then
+          REVISION="${PARAM_REVISION}"
+          ARKCASE_VER="${PARAM_ARKCASE}"
+          if [ -z "${REVISION}" ] || [ -z "${ARKCASE_VER}" ] ; then
               # Parse out the tag, handle the case when it's not there
-              read REVISION < <(
+              readarray -t NEW_VERSIONS < <(
                   set -eo pipefail
 
                   # Parsing out the version from the "VER" argument can be tricky if it's computed from others
@@ -187,23 +203,13 @@ jobs:
                           sed -e "s;^\s*ARG\s;export ${PREFIX};g"
                   )
 
-                  REVISION_CANDIDATES=()
-                  REVISION_CANDIDATES+=("VER")
-                  # TODO: do we want to support many possible version sources? i.e. VER, VERSION,
-                  # IMAGEVER, IMAGE_VERSION, etc?
-                  # REVISION_CANDIDATES+=("VERSION")
-                  # REVISION_CANDIDATES+=("IMAGEVER")
-                  # REVISION_CANDIDATES+=("IMAGEVERSION")
-                  # REVISION_CANDIDATES+=("IMAGE_VERSION")
-                  for C in "${REVISION_CANDIDATES[@]}" ; do
-                      [ -z "${PREFIX}" ] || C="${PREFIX}${C}"
+                  for R in "VER" "ARKCASE_VER" ; do
+                      [ -z "${PREFIX}" ] || R="${PREFIX}${R}"
                       # This checks to see if the candidate is defined, and if it has a non-blank
                       # value. If both are met, then its value is output, and the loop is broken
-                      [ -v "${C}" ] || continue
-                      [ -n "${!C}" ] || continue
-                      echo "${!C}"
-                      break
+                      [ -v "${R}" ] && echo "${!R}" || echo ""
                   done
+                  exit 0
               )
               RC=${?}
 
@@ -212,10 +218,20 @@ jobs:
                   exit ${RC}
               fi
 
+              # We only override the revision if it wasn't provided as a parameter
               if [ -z "${REVISION}" ] ; then
-                  echo "Failed to compute a build version from the Dockerfile"
-                  exit 1
+                  if [ -z "${NEW_VERSIONS[0]}" ] ; then
+                      echo "Failed to compute a build revision from the Dockerfile"
+                      exit 1
+                  fi
+                  REVISION="${NEW_VERSIONS[0]}"
               fi
+
+              # We only override the ArkCase version if it wasn't provided as a parameter
+              [ -z "${ARKCASE_VER}" ] && ARKCASE_VER="${NEW_VERSIONS[1]}"
+
+              echo "Computed REVISION=${REVISION}"
+              echo "Computed ARKCASE_VER=${ARKCASE_VER}"
           fi
 
           # Parse for vailidity ... we'll examine it more closely later
@@ -239,10 +255,60 @@ jobs:
           # If the pre-release info is a "SNAPSHOT", make sure it's used properly
           REVISION_SNAPSHOT="false"
           if [[ "${PRERELEASE}" =~ SNAPSHOT ]] ; then
-              if [[ "${PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT($|[^a-zA-Z0-9_]) ]] ; then
+              if [[ "${PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT ]] ; then
                   REVISION_SNAPSHOT="true"
               else
-                  echo "Illegal use of the word 'SNAPSHOT' as [${PRERELASE}] - must be a standalone word: [${REVISION}]"
+                  echo "Illegal use of the word 'SNAPSHOT' as [${PRERELASE}] - must be the last word: [${REVISION}]"
+                  exit 1
+              fi
+          fi
+
+          # Do the same validation, but for the ArkCase version
+          if [ -n "${ARKCASE_VER}" ] ; then
+              if [[ ! "${ARKCASE_VER}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
+                  echo "ArkCase version is not valid: [${ARKCASE_VER}]"
+                  exit 1
+              fi
+
+              ACM_BASE_NUMBER="${BASH_REMATCH[1]}"
+              ACM_PRERELEASE="${BASH_REMATCH[5]}"
+              ACM_METADATA="${BASH_REMATCH[8]}"
+
+              # If the pre-release info is a "SNAPSHOT", make sure it's used properly
+              ACM_SNAPSHOT="false"
+              if [[ "${ACM_PRERELEASE}" =~ SNAPSHOT ]] ; then
+                  if [[ "${ACM_PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT ]] ; then
+                      ACM_SNAPSHOT="true"
+                  else
+                      echo "Illegal use of the word 'SNAPSHOT' as [${PRERELASE}] - must be the last word: [${ARKCASE_VER}]"
+                      exit 1
+                  fi
+              fi
+
+              # Make sure that the quality level of the ArkCase build is
+              # equal to or higher than the quality level for the inteded
+              # revision (i.e. don't let SNAPSHOT builds be used as the basis
+              # for production builds)
+              if "${REVISION_SNAPSHOT}" ; then
+                  REVISION_QUALITY="0"
+              elif [ -n "${PRERELEASE}" ] ; then
+                  REVISION_QUALITY="1"
+              else
+                  REVISION_QUALITY="2"
+              fi
+              echo "REVISION_QUALITY=${REVISION_QUALITY}"
+
+              if "${ACM_SNAPSHOT}" ; then
+                  ACM_QUALITY="0"
+              elif [ -n "${ACM_PRERELEASE}" ] ; then
+                  ACM_QUALITY="1"
+              else
+                  ACM_QUALITY="2"
+              fi
+              echo "ACM_QUALITY=${ACM_QUALITY}"
+
+              if [ ${REVISION_QUALITY} -gt ${ACM_QUALITY} ] ; then
+                  echo "The target revision quality (${REVISION_QUALITY}) is higher than the base ArkCase quality (${ACM_QUALITY}), and this is not allowed"
                   exit 1
               fi
           fi
@@ -257,18 +323,32 @@ jobs:
           echo "export ENVIRONMENT=${ENVIRONMENT@Q}" >> .env
           echo "ENVIRONMENT=${ENVIRONMENT@Q}"
 
-          echo "export REVISION=${REVISION@Q}" >> .env
           echo "export REVISION_PREFIX=${PREFIX@Q}" >> .env
+          echo "REVISION_PREFIX=${PREFIX@Q}"
+
+          echo "export REVISION=${REVISION@Q}" >> .env
           echo "export REVISION_BASE_NUMBER=${BASE_NUMBER@Q}" >> .env
           echo "export REVISION_PRERELEASE=${PRERELEASE@Q}" >> .env
           echo "export REVISION_METADATA=${METADATA@Q}" >> .env
           echo "export REVISION_SNAPSHOT=${REVISION_SNAPSHOT@Q}" >> .env
           echo "REVISION=${REVISION@Q}"
-          echo "REVISION_PREFIX=${PREFIX@Q}"
           echo "REVISION_BASE_NUMBER=${BASE_NUMBER@Q}"
           echo "REVISION_PRERELEASE=${PRERELEASE@Q}"
           echo "REVISION_METADATA=${METADATA@Q}"
           echo "REVISION_SNAPSHOT=${REVISION_SNAPSHOT@Q}"
+
+          if [ -n "${ARKCASE_VER}" ] ; then
+              echo "export ARKCASE_VER=${ARKCASE_VER@Q}" >> .env
+              echo "export ACM_BASE_NUMBER=${ACM_BASE_NUMBER@Q}" >> .env
+              echo "export ACM_PRERELEASE=${ACM_PRERELEASE@Q}" >> .env
+              echo "export ACM_METADATA=${ACM_METADATA@Q}" >> .env
+              echo "export ACM_SNAPSHOT=${ACM_SNAPSHOT@Q}" >> .env
+              echo "ARKCASE_VER=${ARKCASE_VER@Q}"
+              echo "ACM_BASE_NUMBER=${ACM_BASE_NUMBER@Q}"
+              echo "ACM_PRERELEASE=${ACM_PRERELEASE@Q}"
+              echo "ACM_METADATA=${ACM_METADATA@Q}"
+              echo "ACM_SNAPSHOT=${ACM_SNAPSHOT@Q}"
+          fi
 
           # We only push to public if this is a public repository,
           # AND this build is not a pre-release build
@@ -301,6 +381,7 @@ jobs:
 
           # Always use the base version for this ...
           BUILD_ARGS+=(--build-arg "VER=${REVISION}")
+          [ -n "${ARKCASE_VER:-}" ] && BUILD_ARGS+=(--build-arg "ARKCASE_VER=${ARKCASE_VER}")
 
           # Select the base registries
           BUILD_ARGS+=(--build-arg "PRIVATE_REGISTRY=${ECR_REGISTRY_PRIVATE}")
