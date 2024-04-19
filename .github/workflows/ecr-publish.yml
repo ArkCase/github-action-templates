@@ -205,8 +205,8 @@ jobs:
 
                   for R in "VER" "ARKCASE_VER" ; do
                       [ -z "${PREFIX}" ] || R="${PREFIX}${R}"
-                      # This checks to see if the candidate is defined, and if it has a non-blank
-                      # value. If both are met, then its value is output, and the loop is broken
+                      # This checks for each variable and outputs its
+                      # value if present, or an empty string if absent
                       [ -v "${R}" ] && echo "${!R}" || echo ""
                   done
                   exit 0
