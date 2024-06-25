@@ -189,8 +189,8 @@ jobs:
           # Make sure it's defined if it isn't already
           REVISION="${PARAM_REVISION}"
           ARKCASE_VER="${PARAM_ARKCASE}"
-          ARKCASE_VER_UI="${PARAM_ARKCASE_UI}"
-          if [ -z "${REVISION}" ] || [ -z "${ARKCASE_VER}" || [ -z "${ARKCASE_VER_UI}" ] ; then
+          ARKCASE_UI_VER="${PARAM_ARKCASE_UI}"
+          if [ -z "${REVISION}" ] || [ -z "${ARKCASE_VER}" || [ -z "${ARKCASE_UI_VER}" ] ; then
               # Parse out the tag, handle the case when it's not there
               readarray -t NEW_VERSIONS < <(
                   set -eo pipefail
@@ -227,7 +227,7 @@ jobs:
                       [ -v "${R}" ] && echo "${!R}" || echo ""
                   done
 
-                  for R in "VER" "ARKCASE_VER_UI" ; do
+                  for R in "VER" "ARKCASE_UI_VER" ; do
                       [ -z "${PREFIX}" ] || R="${PREFIX}${R}"
                       # This checks for each variable and outputs its
                       # value if present, or an empty string if absent
@@ -255,11 +255,11 @@ jobs:
               [ -z "${ARKCASE_VER}" ] && ARKCASE_VER="${NEW_VERSIONS[1]}"
 
               # We only override the ArkCase version if it wasn't provided as a parameter
-              [ -z "${ARKCASE_VER_UI}" ] && ARKCASE_VER_UI="${NEW_VERSIONS[2]}"
+              [ -z "${ARKCASE_UI_VER}" ] && ARKCASE_UI_VER="${NEW_VERSIONS[2]}"
 
               echo "Computed REVISION=${REVISION}"
               echo "Computed ARKCASE_VER=${ARKCASE_VER}"
-              echo "Computed ARKCASE_VER_UI=${ARKCASE_VER_UI}"
+              echo "Computed ARKCASE_UI_VER=${ARKCASE_UI_VER}"
           fi
 
           # Parse for vailidity ... we'll examine it more closely later
@@ -342,9 +342,9 @@ jobs:
           fi
 
           # Do the same validation, but for the ArkCase UI version
-          if [ -n "${ARKCASE_VER_UI}" ] ; then
-              if [[ ! "${ARKCASE_VER_UI}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
-                  echo "ArkCase version is not valid: [${ARKCASE_VER_UI}]"
+          if [ -n "${ARKCASE_UI_VER}" ] ; then
+              if [[ ! "${ARKCASE_UI_VER}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
+                  echo "ArkCase version is not valid: [${ARKCASE_UI_VER}]"
                   exit 1
               fi
 
@@ -358,7 +358,7 @@ jobs:
                   if [[ "${ACM_UI_PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT ]] ; then
                       ACM_SNAPSHOT="true"
                   else
-                      echo "Illegal use of the word 'SNAPSHOT' as [${PRERELASE}] - must be the last word: [${ARKCASE_VER_UI}]"
+                      echo "Illegal use of the word 'SNAPSHOT' as [${PRERELASE}] - must be the last word: [${ARKCASE_UI_VER}]"
                       exit 1
                   fi
               fi
@@ -428,13 +428,13 @@ jobs:
               echo "ACM_SNAPSHOT=${ACM_SNAPSHOT@Q}"
           fi
 
-          if [ -n "${ARKCASE_VER_UI}" ] ; then
-              echo "export ARKCASE_VER_UI=${ARKCASE_VER_UI@Q}" >> .env
+          if [ -n "${ARKCASE_UI_VER}" ] ; then
+              echo "export ARKCASE_UI_VER=${ARKCASE_UI_VER@Q}" >> .env
               echo "export ACM_UI_BASE_NUMBER=${ACM_UI_BASE_NUMBER@Q}" >> .env
               echo "export ACM_UI_PRERELEASE=${ACM_UI_PRERELEASE@Q}" >> .env
               echo "export ACM_UI_METADATA=${ACM_UI_METADATA@Q}" >> .env
               echo "export ACM_UI_SNAPSHOT=${ACM_UI_SNAPSHOT@Q}" >> .env
-              echo "ARKCASE_VER_UI=${ARKCASE_VER_UI@Q}"
+              echo "ARKCASE_UI_VER=${ARKCASE_UI_VER@Q}"
               echo "ACM_UI_BASE_NUMBER=${ACM_UI_BASE_NUMBER@Q}"
               echo "ACM_UI_PRERELEASE=${ACM_UI_PRERELEASE@Q}"
               echo "ACM_UI_METADATA=${ACM_UI_METADATA@Q}"
@@ -473,7 +473,7 @@ jobs:
           # Always use the base version for this ...
           BUILD_ARGS+=(--build-arg "VER=${REVISION}")
           [ -n "${ARKCASE_VER:-}" ] && BUILD_ARGS+=(--build-arg "ARKCASE_VER=${ARKCASE_VER}")
-          [ -n "${ARKCASE_VER_UI:-}" ] && BUILD_ARGS+=(--build-arg "ARKCASE_VER_UI=${ARKCASE_VER_UI}")
+          [ -n "${ARKCASE_UI_VER:-}" ] && BUILD_ARGS+=(--build-arg "ARKCASE_UI_VER=${ARKCASE_UI_VER}")
 
           # Select the base registries
           BUILD_ARGS+=(--build-arg "PRIVATE_REGISTRY=${ECR_REGISTRY_PRIVATE}")
