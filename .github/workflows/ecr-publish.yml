@@ -434,7 +434,7 @@ jobs:
               echo "export ACM_UI_PRERELEASE=${ACM_UI_PRERELEASE@Q}" >> .env
               echo "export ACM_UI_METADATA=${ACM_UI_METADATA@Q}" >> .env
               echo "export ACM_UI_SNAPSHOT=${ACM_UI_SNAPSHOT@Q}" >> .env
-              echo "ARKCASE_UI_VER=${ARKCASE_UI_VER@Q}"
+              echo "ARKCASE_VER_UI=${ARKCASE_VER_UI@Q}"
               echo "ACM_UI_BASE_NUMBER=${ACM_UI_BASE_NUMBER@Q}"
               echo "ACM_UI_PRERELEASE=${ACM_UI_PRERELEASE@Q}"
               echo "ACM_UI_METADATA=${ACM_UI_METADATA@Q}"
@@ -473,7 +473,7 @@ jobs:
           # Always use the base version for this ...
           BUILD_ARGS+=(--build-arg "VER=${REVISION}")
           [ -n "${ARKCASE_VER:-}" ] && BUILD_ARGS+=(--build-arg "ARKCASE_VER=${ARKCASE_VER}")
-          [ -n "${ARKCASE_UI_VER:-}" ] && BUILD_ARGS+=(--build-arg "ARKCASE_UI_VER=${ARKCASE_UI_VER}")
+          [ -n "${ARKCASE_VER_UI:-}" ] && BUILD_ARGS+=(--build-arg "ARKCASE_VER_UI=${ARKCASE_VER_UI}")
 
           # Select the base registries
           BUILD_ARGS+=(--build-arg "PRIVATE_REGISTRY=${ECR_REGISTRY_PRIVATE}")
