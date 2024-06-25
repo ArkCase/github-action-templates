@@ -10,6 +10,10 @@ on:
         description: "The ArkCase version to use for construction (computed from the Dockerfile if not provided)"
         required: false
         type: string
+      arkcase_ui:
+        description: "The ArkCase UI version to use for construction (computed from the Dockerfile if not provided)"
+        required: false
+        type: string  
     secrets:
       ECR_AWS_REGION:
         required: true
@@ -53,6 +57,7 @@ jobs:
         env:
           PARAM_REVISION: ${{ inputs.revision }}
           PARAM_ARKCASE: ${{ inputs.arkcase }}
+          PARAM_ARKCASE_UI: ${{ inputs.arkcase_ui }}
         run: |
           if [ -n "${PARAM_REVISION}" ] ; then
               # Parse for vailidity ... we'll examine it more closely later
@@ -65,6 +70,13 @@ jobs:
               # Parse for vailidity ... we'll examine it more closely later
               if [[ ! "${PARAM_ARKCASE}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
                   echo "ArkCase version is not valid: [${PARAM_ARKCASE}]"
+                  exit 1
+              fi
+          fi
+          if [ -n "${PARAM_ARKCASE_UI}" ] ; then
+              # Parse for vailidity ... we'll examine it more closely later
+              if [[ ! "${PARAM_ARKCASE_UI}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
+                  echo "ArkCase UI version is not valid: [${PARAM_ARKCASE_UI}]"
                   exit 1
               fi
           fi
@@ -84,6 +96,7 @@ jobs:
         env:
           PARAM_REVISION: ${{ inputs.revision }}
           PARAM_ARKCASE: ${{ inputs.arkcase }}
+          PARAM_ARKCASE_UI: ${{ inputs.arkcase_ui }}
         run: |
           # Start with a clean environment
           : > .env
@@ -97,6 +110,9 @@ jobs:
 
           echo "export PARAM_ARKCASE=${PARAM_ARKCASE@Q}" >> .env
           echo "PARAM_ARKCASE=${PARAM_ARKCASE@Q}"
+
+          echo "export PARAM_ARKCASE_UI=${PARAM_ARKCASE_UI@Q}" >> .env
+          echo "PARAM_ARKCASE_UI=${PARAM_ARKCASE_UI@Q}"
 
       - name: Docker Login to Alfresco Quay.IO (if applicable)
         env:
@@ -173,7 +189,8 @@ jobs:
           # Make sure it's defined if it isn't already
           REVISION="${PARAM_REVISION}"
           ARKCASE_VER="${PARAM_ARKCASE}"
-          if [ -z "${REVISION}" ] || [ -z "${ARKCASE_VER}" ] ; then
+          ARKCASE_VER_UI="${PARAM_ARKCASE_UI}"
+          if [ -z "${REVISION}" ] || [ -z "${ARKCASE_VER}" || [ -z "${ARKCASE_VER_UI}" ] ; then
               # Parse out the tag, handle the case when it's not there
               readarray -t NEW_VERSIONS < <(
                   set -eo pipefail
@@ -209,6 +226,13 @@ jobs:
                       # value if present, or an empty string if absent
                       [ -v "${R}" ] && echo "${!R}" || echo ""
                   done
+
+                  for R in "VER" "ARKCASE_VER_UI" ; do
+                      [ -z "${PREFIX}" ] || R="${PREFIX}${R}"
+                      # This checks for each variable and outputs its
+                      # value if present, or an empty string if absent
+                      [ -v "${R}" ] && echo "${!R}" || echo ""
+                  done
                   exit 0
               )
               RC=${?}
@@ -230,8 +254,12 @@ jobs:
               # We only override the ArkCase version if it wasn't provided as a parameter
               [ -z "${ARKCASE_VER}" ] && ARKCASE_VER="${NEW_VERSIONS[1]}"
 
+              # We only override the ArkCase version if it wasn't provided as a parameter
+              [ -z "${ARKCASE_VER_UI}" ] && ARKCASE_VER_UI="${NEW_VERSIONS[2]}"
+
               echo "Computed REVISION=${REVISION}"
               echo "Computed ARKCASE_VER=${ARKCASE_VER}"
+              echo "Computed ARKCASE_VER_UI=${ARKCASE_VER_UI}"
           fi
 
           # Parse for vailidity ... we'll examine it more closely later
@@ -313,6 +341,56 @@ jobs:
               fi
           fi
 
+          # Do the same validation, but for the ArkCase UI version
+          if [ -n "${ARKCASE_VER_UI}" ] ; then
+              if [[ ! "${ARKCASE_VER_UI}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
+                  echo "ArkCase version is not valid: [${ARKCASE_VER_UI}]"
+                  exit 1
+              fi
+
+              ACM_UI_BASE_NUMBER="${BASH_REMATCH[1]}"
+              ACM_UI_PRERELEASE="${BASH_REMATCH[5]}"
+              ACM_UI_METADATA="${BASH_REMATCH[8]}"
+
+              # If the pre-release info is a "SNAPSHOT", make sure it's used properly
+              ACM_UI_SNAPSHOT="false"
+              if [[ "${ACM_UI_PRERELEASE}" =~ SNAPSHOT ]] ; then
+                  if [[ "${ACM_UI_PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT ]] ; then
+                      ACM_SNAPSHOT="true"
+                  else
+                      echo "Illegal use of the word 'SNAPSHOT' as [${PRERELASE}] - must be the last word: [${ARKCASE_VER_UI}]"
+                      exit 1
+                  fi
+              fi
+
+              # Make sure that the quality level of the ArkCase build is
+              # equal to or higher than the quality level for the inteded
+              # revision (i.e. don't let SNAPSHOT builds be used as the basis
+              # for production builds)
+              if "${REVISION_SNAPSHOT}" ; then
+                  REVISION_QUALITY="0"
+              elif [ -n "${PRERELEASE}" ] ; then
+                  REVISION_QUALITY="1"
+              else
+                  REVISION_QUALITY="2"
+              fi
+              echo "REVISION_QUALITY=${REVISION_QUALITY}"
+
+              if "${ACM_UI_SNAPSHOT}" ; then
+                  ACM_QUALITY="0"
+              elif [ -n "${ACM_UI_PRERELEASE}" ] ; then
+                  ACM_QUALITY="1"
+              else
+                  ACM_QUALITY="2"
+              fi
+              echo "ACM_QUALITY=${ACM_QUALITY}"
+
+              if [ ${REVISION_QUALITY} -gt ${ACM_QUALITY} ] ; then
+                  echo "The target revision quality (${REVISION_QUALITY}) is higher than the base ArkCase quality (${ACM_QUALITY}), and this is not allowed"
+                  exit 1
+              fi
+          fi
+
           # Assume the default is "devel", until proven otherwise
           export ENVIRONMENT="devel"
           export PREFIX="devel-"
@@ -350,6 +428,19 @@ jobs:
               echo "ACM_SNAPSHOT=${ACM_SNAPSHOT@Q}"
           fi
 
+          if [ -n "${ARKCASE_VER_UI}" ] ; then
+              echo "export ARKCASE_VER_UI=${ARKCASE_VER_UI@Q}" >> .env
+              echo "export ACM_UI_BASE_NUMBER=${ACM_UI_BASE_NUMBER@Q}" >> .env
+              echo "export ACM_UI_PRERELEASE=${ACM_UI_PRERELEASE@Q}" >> .env
+              echo "export ACM_UI_METADATA=${ACM_UI_METADATA@Q}" >> .env
+              echo "export ACM_UI_SNAPSHOT=${ACM_UI_SNAPSHOT@Q}" >> .env
+              echo "ARKCASE_UI_VER=${ARKCASE_UI_VER@Q}"
+              echo "ACM_UI_BASE_NUMBER=${ACM_UI_BASE_NUMBER@Q}"
+              echo "ACM_UI_PRERELEASE=${ACM_UI_PRERELEASE@Q}"
+              echo "ACM_UI_METADATA=${ACM_UI_METADATA@Q}"
+              echo "ACM_UI_SNAPSHOT=${ACM_UI_SNAPSHOT@Q}"
+          fi
+
           # We only push to public if this is a public repository,
           # AND this build is not a pre-release build
           export PUSH_TO_PUBLIC="false"
@@ -382,6 +473,7 @@ jobs:
           # Always use the base version for this ...
           BUILD_ARGS+=(--build-arg "VER=${REVISION}")
           [ -n "${ARKCASE_VER:-}" ] && BUILD_ARGS+=(--build-arg "ARKCASE_VER=${ARKCASE_VER}")
+          [ -n "${ARKCASE_UI_VER:-}" ] && BUILD_ARGS+=(--build-arg "ARKCASE_UI_VER=${ARKCASE_UI_VER}")
 
           # Select the base registries
           BUILD_ARGS+=(--build-arg "PRIVATE_REGISTRY=${ECR_REGISTRY_PRIVATE}")
