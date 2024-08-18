@@ -318,7 +318,7 @@ jobs:
           export PREFIX="devel-"
           # This makes it easier to add special branch handlers later on
           case "${GITHUB_REF}" in
-              "refs/heads/main" ) ENVIRONMENT="stable" ; PREFIX="" ;;
+              "refs/heads/main" | "refs/tags/release"/* ) ENVIRONMENT="stable" ; PREFIX="" ;;
           esac
           echo "export ENVIRONMENT=${ENVIRONMENT@Q}" >> .env
           echo "ENVIRONMENT=${ENVIRONMENT@Q}"
