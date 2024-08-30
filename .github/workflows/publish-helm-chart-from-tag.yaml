@@ -35,13 +35,13 @@ jobs:
       # fails, the last job will remove the errant tag from the
       # repository to keep things clean.
       - name: Checkout the chart sources
-        if: ${{ env.EXIT == "false" }}
+        if: ${{ env.EXIT == 'false' }}
         uses: actions/checkout@v4
         with:
           path: "${SRC_REPO_DIR}"
 
       - name: Validate the execution
-        if: ${{ env.EXIT == "false" }}
+        if: ${{ env.EXIT == 'false' }}
         run: |
           set -euo pipefail
           if [[ ! "${GITHUB_REF}" =~ ^refs/tags/(([^/]+)/([^/]+)/([^/]+))$ ]] ; then
@@ -118,18 +118,18 @@ jobs:
           done
 
       - name: Checkout the GH Pages branch
-        if: ${{ env.EXIT == "false" }}
+        if: ${{ env.EXIT == 'false' }}
         uses: actions/checkout@v4
         with:
           path: "${TGT_REPO_DIR}"
           ref: "gh-pages"
 
       - name: Install Helm
-        if: ${{ env.EXIT == "false" }}
+        if: ${{ env.EXIT == 'false' }}
         uses: azure/setup-helm@v4.2.0
 
       - name: Package the Chart
-        if: ${{ env.EXIT == "false" }}
+        if: ${{ env.EXIT == 'false' }}
         run: |
           set -euo pipefail
 
@@ -164,7 +164,7 @@ jobs:
           helm repo index --url "${PUBLISH_HELM_REPO_URL}" "${CHART_TGT_DIR}"
 
       - name: Copy any documentation updates
-        if: ${{ env.EXIT == "false" }}
+        if: ${{ env.EXIT == 'false' }}
         run: |
           set -euo pipefail
 
@@ -176,7 +176,7 @@ jobs:
           ( cd "${DOC_SRC_DIR}" && tar -cf - . ) | tar -C "${TGT_REPO_DIR}" -xvf -
 
       - name: Publish the chart & doc changes
-        if: ${{ env.EXIT == "false" }}
+        if: ${{ env.EXIT == 'false' }}
         run: |
           set -euo pipefail
           cd "${TGT_REPO_DIR}"
