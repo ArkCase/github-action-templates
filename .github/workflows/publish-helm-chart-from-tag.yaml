@@ -36,10 +36,6 @@ on:
 
 env:
 
-  CHART_DIR: ${{ inputs.CHART_DIR }}
-  DOC_DIR: ${{ inputs.DOC_DIR }}
-  PUBLISH_HELM_REPO_URL: ${{ inputs.PUBLISH_HELM_REPO_URL }}
-
   # So we can easily identify what's what and not mix things up
   SRC_REPO_DIR: "sources"
   TGT_REPO_DIR: "pages"
@@ -63,6 +59,8 @@ jobs:
 
       - name: Validate the execution
         if: ${{ env.EXIT == 'false' }}
+        env:
+          CHART_DIR: ${{ inputs.CHART_DIR }}
         run: |
           set -euo pipefail
           if [[ ! "${GITHUB_REF}" =~ ^refs/tags/(([^/]+)/([^/]+)/([^/]+))$ ]] ; then
@@ -149,6 +147,8 @@ jobs:
 
       - name: Package the Chart
         if: ${{ env.EXIT == 'false' }}
+        env:
+          PUBLISH_HELM_REPO_URL: ${{ inputs.PUBLISH_HELM_REPO_URL }}
         run: |
           set -euo pipefail
 
@@ -183,6 +183,8 @@ jobs:
 
       - name: Copy any documentation updates
         if: ${{ env.EXIT == 'false' }}
+        env:
+          DOC_DIR: ${{ inputs.DOC_DIR }}
         run: |
           set -euo pipefail
 
