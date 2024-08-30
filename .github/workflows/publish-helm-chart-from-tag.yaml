@@ -1,0 +1,169 @@
+#
+# The expected tag format is: ${CHART_NAME}/${TYPE}/${VERSION}
+#
+# ${CHART_NAME} == the chart name (no slashes!!) will be taken as relative to the ${CHART_SRC_DIR} directory!
+#             If ${CHART_SRC_DIR} is blank or not specified, it will be defaulted to ".". The ${CHART_SRC_DIR}
+#             directory in turn must be relative to the "${SRC_REPO_DIR}". The final chart packaged will be
+#             expected to be packaged as "${TGT_REPO_DIR}/${CHART_TGT_DIR}/${CHART_NAME}-${VERSION}.tgz". If
+#             ${CHART_TGT_DIR} is not specified, it will be defaulted to "."
+#
+# ${RELEASE_TYPE}" == the type of release: a "release" (i.e. final version of a chart) or a "test" (i.e. a pre-release chart)
+#
+# ${VERSION} == the version of the chart to release. It must match the final packaged version of the chart
+#
+
+name: Publish a Helm Chart based on tags
+
+on:
+  push:
+    tags:
+      - "test/**"
+      - "release/**"
+
+env:
+
+  # So we can easily identify what's what and not mix things up
+  SRC_REPO_DIR: "src"
+  TGT_REPO_DIR: "tgt"
+
+  # We define this here just so we can keep all our step definitions
+  # consistent with the check for its value
+  EXIT: "false"
+
+jobs:
+  publish-helm-chart:
+    runs-on: ubuntu-latest
+    steps:
+      # This one needs to happen ALWAYS, b/c if tag validation
+      # fails, the last job will remove the errant tag from the
+      # repository to keep things clean.
+      - name: Checkout the chart sources
+        if: ${{ env.EXIT == "false" }}
+        uses: actions/checkout@v4
+        with:
+          path: "${SRC_REPO_DIR}"
+
+      - name: Validate the execution
+        if: ${{ env.EXIT == "false" }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${GITHUB_REF}" =~ ^refs/tags/(([^/]+)/([^/]+)/([^/]+))$ ]] ; then
+              echo "This tag type is not supported: ${GITHUB_REF}"
+              echo "EXIT=true" >> "${GITHUB_ENV}"
+              exit 0
+          fi
+
+          FULL_TAG="${BASH_REMATCH[1]}"
+
+          # The name of the chart (relative to the src/ directory, no "/" allowed in the name)
+          CHART_NAME="${BASH_REMATCH[2]}"
+
+          # The type of release: test/release
+          RELEASE_TYPE="${BASH_REMATCH[3]}"
+
+          # The version being released
+          VERSION="${BASH_REMATCH[4]}"
+
+          VERSION_RE='^(0|[1-9][0-9]*)([.](0|[1-9][0-9]*))([.](0|[1-9][0-9]*))?(-([0-9a-zA-Z_.-]+))?$'
+          if [[ ! "${VERSION}" =~ ${VERSION_RE} ]] ; then
+              echo "Invalid version number [${VERSION}] - must match SemVer rules"
+              exit 1
+          fi
+
+          MAJOR="${BASH_REMATCH[1]}"
+          MINOR="${BASH_REMATCH[3]}"
+          PATCH="${BASH_REMATCH[5]}"
+          PRE_RELEASE="${BASH_REMATCH[7]}"
+
+          if [ -n "${PRE_RELEASE}" ] ; then
+              VERSION_TYPE="test"
+          else
+              VERSION_TYPE="release"
+          fi
+
+          if [ "${VERSION_TYPE}" != "${RELEASE_TYPE}" ] ; then
+              echo "The version number ${VERSION} may only be used for ${VERSION_TYPE} releases, not for ${RELEASE_TYPE} releases."
+              exit 1
+          fi
+          for VAR in CHART_SRC_DIR CHART_TGT_DIR ; do
+              if [ -v "${VAR}" ] && [ -n "${!VAR}" ] ; then
+                  # Validate that the path doesn't have "." or ".." elements
+                  case "${!VAR}" in
+                      /* ) echo "The ${VAR} value may not be an absolute path" ; exit 1 ;;
+                      .. | ../* | */.. | */../* ) echo "The ${VAR} value may not contain '..' elements" ; exit 1 ;;
+                      * ) ;;
+                  esac
+              else
+                  declare -x "${VAR}=."
+              fi
+          done
+
+          # TODO: Add authentication support
+          helm repo add "${PUBLISH_HELM_REPO_NAME}" "${PUBLISH_HELM_REPO_URL}"
+
+          # Everything looks good ... three more variables to compute
+          CHART_SRC_DIR="${SRC_REPO_DIR}/${CHART_SRC_DIR}"
+          CHART_TGT_DIR="${TGT_REPO_DIR}/${CHART_TGT_DIR}"
+          CHART_TGT_FILE="${CHART_NAME}-${VERSION}.tgz"
+
+          # Export all the computed variables in their exact current values
+          echo "All parameters appear to be valid"
+          for VAR in FULL_TAG CHART_NAME RELEASE_TYPE VERSION MAJOR MINOR PATCH PRE_RELEASE CHART_SRC_DIR CHART_TGT_DIR CHART_TGT_FILE ; do
+              echo "${VAR}=${!VAR@Q}" | tee -a "${GITHUB_ENV}"
+          done
+
+      - name: Checkout the chart publication target
+        if: ${{ env.EXIT == "false" }}
+        uses: actions/checkout@v4
+        with:
+          repository: "${PUBLISH_GIT_REPO}"
+          path: "${TGT_REPO_DIR}"
+          fetch-tags: "true"
+
+      - name: Package the Chart
+        if: ${{ env.EXIT == "false" }}
+        run: |
+          set -euo pipefail
+          if ! OUT="$(helm package --destination "${CHART_TGT_DIR}" --dependency-update "${CHART_SRC_DIR}/${CHART_NAME}" 2>&1)" ; then
+              echo "Failed to package the chart: ${OUT}"
+              exit 1
+          fi
+
+          # Packaging complete, get the name of the file packaged
+          OUT_RE='^.*to: (.*[.]tgz)$'
+          if [[ ! "${OUT}" =~ ${OUT_RE} ]] ; then
+              echo "Unexpected output from 'helm package': ${OUT}"
+              exit 1
+          fi
+          PACKAGED_CHART="$(basename "${BASH_REMATCH[1]}")"
+
+          # The packaged chart should be in the file "${CHART_TGT_DIR}/${CHART_NAME}-${VERSION}.tgz"
+          CHART_FILE="${CHART_NAME}-${VERSION}.tgz"
+          if [ "${PACKAGED_CHART}" != "${CHART_FILE}" ] ; then
+              echo "The packaged chart's name (${PACKAGED_CHART}) did not match the expected name (${CHART_FILE})"
+              exit 1
+          fi
+
+      - name: Publish the Chart
+        if: ${{ env.EXIT == "false" }}
+        run: |
+          set -euo pipefail
+
+          # Update the repository index
+          helm repo index --url "${PUBLISH_HELM_REPO_URL}" "${CHART_TGT_DIR}"
+
+          # Publish to the target repository
+          cd "${TGT_REPO_DIR}"
+          git add .
+          git commit -a -m "Publishing ${CHART_NAME}-${VERSION}"
+          git tag "${FULL_TAG}"
+          git push origin --tags
+
+      - name: Cleaning up after a failed run
+        if: failure()
+        run: |
+          set -euo pipefail
+
+          # We have a checkout ... we need to remove the tag that started all of this
+          # so it can either be pushed again, or removed/re-created
+          git -c "${SRC_REPO_DIR}" push --force origin ":${FULL_TAG}"
