@@ -16,8 +16,28 @@ name: Publish a Helm Chart based on tags
 
 on:
   workflow_call:
+    inputs:
+      CHART_SRC_DIR:
+        description: "The directory within the source tree where the chart's directory is to be found"
+        required: false
+        default: "."
+        type: string
+      DOC_SRC_DIR:
+        description: "The directory within the source tree where the publishable documentation is to be found"
+        required: false
+        default: "."
+        type: string
+      PUBLISH_HELM_REPO_URL:
+        description: "The URL with which to update the repository index on publishing (generally auto-computed)"
+        required: false
+        default: ""
+        type: string
 
 env:
+
+  CHART_SRC_DIR: ${{ inputs.CHART_SRC_DIR }}
+  DOC_SRC_DIR: ${{ inputs.DOC_SRC_DIR }}
+  PUBLISH_HELM_REPO_URL: ${{ inputs.PUBLISH_HELM_REPO_URL }}
 
   # So we can easily identify what's what and not mix things up
   SRC_REPO_DIR: "sources"
@@ -159,7 +179,6 @@ jobs:
           fi
 
           # Update the repository index
-          [ -v PUBLISH_HELM_REPO_URL ] || PUBLISH_HELM_REPO_URL=""
           [ -n "${PUBLISH_HELM_REPO_URL}" ] || PUBLISH_HELM_REPO_URL="$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.html_url')"
           helm repo index --url "${PUBLISH_HELM_REPO_URL}" "${CHART_TGT_DIR}"
 
