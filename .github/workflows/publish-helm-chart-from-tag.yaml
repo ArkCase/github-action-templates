@@ -23,8 +23,8 @@ on:
 env:
 
   # So we can easily identify what's what and not mix things up
-  SRC_REPO_DIR: "src"
-  TGT_REPO_DIR: "tgt"
+  SRC_REPO_DIR: "sources"
+  TGT_REPO_DIR: "pages"
 
   # We define this here just so we can keep all our step definitions
   # consistent with the check for its value
@@ -64,16 +64,17 @@ jobs:
           # The version being released
           VERSION="${BASH_REMATCH[4]}"
 
-          VERSION_RE='^(0|[1-9][0-9]*)([.](0|[1-9][0-9]*))([.](0|[1-9][0-9]*))?(-([0-9a-zA-Z_.-]+))?$'
+          VERSION_RE='^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)([.](0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?([+]([0-9a-zA-Z-]+([.][0-9a-zA-Z-]+)*))?$'
           if [[ ! "${VERSION}" =~ ${VERSION_RE} ]] ; then
               echo "Invalid version number [${VERSION}] - must match SemVer rules"
               exit 1
           fi
 
           MAJOR="${BASH_REMATCH[1]}"
-          MINOR="${BASH_REMATCH[3]}"
-          PATCH="${BASH_REMATCH[5]}"
-          PRE_RELEASE="${BASH_REMATCH[7]}"
+          MINOR="${BASH_REMATCH[2]}"
+          PATCH="${BASH_REMATCH[3]}"
+          PRE_RELEASE="${BASH_REMATCH[5]}"
+          BUILD_METADATA="${BASH_REMATCH[10]}"
 
           if [ -n "${PRE_RELEASE}" ] ; then
               VERSION_TYPE="test"
@@ -98,9 +99,6 @@ jobs:
               fi
           done
 
-          # TODO: Add authentication support
-          helm repo add "${PUBLISH_HELM_REPO_NAME}" "${PUBLISH_HELM_REPO_URL}"
-
           # Everything looks good ... three more variables to compute
           CHART_SRC_DIR="${SRC_REPO_DIR}/${CHART_SRC_DIR}"
           CHART_TGT_DIR="${TGT_REPO_DIR}/${CHART_TGT_DIR}"
@@ -108,17 +106,20 @@ jobs:
 
           # Export all the computed variables in their exact current values
           echo "All parameters appear to be valid"
-          for VAR in FULL_TAG CHART_NAME RELEASE_TYPE VERSION MAJOR MINOR PATCH PRE_RELEASE CHART_SRC_DIR CHART_TGT_DIR CHART_TGT_FILE ; do
+          for VAR in FULL_TAG CHART_NAME RELEASE_TYPE VERSION MAJOR MINOR PATCH PRE_RELEASE BUILD_METADATA CHART_SRC_DIR CHART_TGT_DIR CHART_TGT_FILE ; do
               echo "${VAR}=${!VAR@Q}" | tee -a "${GITHUB_ENV}"
           done
 
-      - name: Checkout the chart publication target
+      - name: Checkout the GH Pages branch
         if: ${{ env.EXIT == "false" }}
         uses: actions/checkout@v4
         with:
-          repository: "${PUBLISH_GIT_REPO}"
           path: "${TGT_REPO_DIR}"
-          fetch-tags: "true"
+          ref: "gh-pages"
+
+      - name: Install Helm
+        if: ${{ env.EXIT == "false" }}
+        uses: azure/setup-helm@v4.2.0
 
       - name: Package the Chart
         if: ${{ env.EXIT == "false" }}
@@ -144,20 +145,31 @@ jobs:
               exit 1
           fi
 
-      - name: Publish the Chart
+          # Update the repository index
+          [ -v PUBLISH_HELM_REPO_URL ] || PUBLISH_HELM_REPO_URL=""
+          [ -n "${PUBLISH_HELM_REPO_URL}" ] || PUBLISH_HELM_REPO_URL="$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.html_url')"
+          helm repo index --url "${PUBLISH_HELM_REPO_URL}" "${CHART_TGT_DIR}"
+
+      - name: Copy any documentation updates
         if: ${{ env.EXIT == "false" }}
         run: |
           set -euo pipefail
 
-          # Update the repository index
-          helm repo index --url "${PUBLISH_HELM_REPO_URL}" "${CHART_TGT_DIR}"
+          # Add the documentation, if needed
+          DOC_SRC_DIR="${SRC_REPO_DIR}/${DOC_SRC_DIR}"
+          [ -d "${DOC_SRC_DIR}" ] || exit 0
 
-          # Publish to the target repository
+          echo "Copying the documentation"
+          ( cd "${DOC_SRC_DIR}" && tar -cf - . ) | tar -C "${TGT_REPO_DIR}" -xvf -
+
+      - name: Publish the chart & doc changes
+        if: ${{ env.EXIT == "false" }}
+        run: |
+          set -euo pipefail
           cd "${TGT_REPO_DIR}"
           git add .
-          git commit -a -m "Publishing ${CHART_NAME}-${VERSION}"
-          git tag "${FULL_TAG}"
-          git push origin --tags
+          git commit -m "Publishing ${CHART_NAME}-${VERSION}"
+          git push
 
       - name: Cleaning up after a failed run
         if: failure()
@@ -166,4 +178,4 @@ jobs:
 
           # We have a checkout ... we need to remove the tag that started all of this
           # so it can either be pushed again, or removed/re-created
-          git -c "${SRC_REPO_DIR}" push --force origin ":${FULL_TAG}"
+          git -C "${SRC_REPO_DIR}" push --force origin ":${FULL_TAG}"
