@@ -125,6 +125,12 @@ jobs:
         if: ${{ env.EXIT == "false" }}
         run: |
           set -euo pipefail
+
+          if [ -e "${CHART_TGT_DIR}/${CHART_TGT_FILE}" ] ; then
+              echo "Version ${VERSION} of chart [${CHART_NAME}] has already been published. Overwrite is not allowed."
+              exit 1
+          fi
+
           if ! OUT="$(helm package --destination "${CHART_TGT_DIR}" --dependency-update "${CHART_SRC_DIR}/${CHART_NAME}" 2>&1)" ; then
               echo "Failed to package the chart: ${OUT}"
               exit 1
