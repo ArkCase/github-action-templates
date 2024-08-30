@@ -15,9 +15,7 @@
 name: Publish a Helm Chart based on tags
 
 on:
-  push:
-    tags:
-      - "**"
+  workflow_call:
 
 env:
 
