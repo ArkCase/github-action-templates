@@ -81,8 +81,6 @@ jobs:
               exit 0
           fi
 
-          FULL_TAG="${BASH_REMATCH[1]}"
-
           # The name of the chart (relative to the src/ directory, no "/" allowed in the name)
           CHART_NAME="${BASH_REMATCH[2]}"
 
@@ -134,7 +132,7 @@ jobs:
 
           # Export all the computed variables in their exact current values
           echo "All parameters appear to be valid"
-          for VAR in FULL_TAG CHART_NAME RELEASE_TYPE VERSION MAJOR MINOR PATCH PRE_RELEASE BUILD_METADATA CHART_SRC_DIR CHART_TGT_DIR CHART_TGT_FILE ; do
+          for VAR in CHART_NAME RELEASE_TYPE VERSION MAJOR MINOR PATCH PRE_RELEASE BUILD_METADATA CHART_SRC_DIR CHART_TGT_DIR CHART_TGT_FILE ; do
               echo "${VAR}=${!VAR}" | tee -a "${GITHUB_ENV}"
           done
 
@@ -206,9 +204,4 @@ jobs:
 
       - name: Cleaning up after a failed run
         if: failure()
-        run: |
-          set -euo pipefail
-
-          # We have a checkout ... we need to remove the tag that started all of this
-          # so it can either be pushed again, or removed/re-created
-          git -C "${SRC_REPO_DIR}" push --force origin ":${FULL_TAG}"
+        uses: prompt/actions-delete-tag@v1
