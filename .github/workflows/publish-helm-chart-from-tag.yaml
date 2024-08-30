@@ -114,7 +114,7 @@ jobs:
           # Export all the computed variables in their exact current values
           echo "All parameters appear to be valid"
           for VAR in FULL_TAG CHART_NAME RELEASE_TYPE VERSION MAJOR MINOR PATCH PRE_RELEASE BUILD_METADATA CHART_SRC_DIR CHART_TGT_DIR CHART_TGT_FILE ; do
-              echo "${VAR}=${!VAR@Q}" | tee -a "${GITHUB_ENV}"
+              echo "${VAR}=${!VAR}" | tee -a "${GITHUB_ENV}"
           done
 
       - name: Checkout the GH Pages branch
