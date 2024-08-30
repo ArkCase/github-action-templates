@@ -1,0 +1,219 @@
+#!/bin/bash
+
+set -euo pipefail
+
+export GITHUB_RUN_NUMBER="23"
+export GITHUB_REPOSITORY="arkcase/ark_helm_charts"
+export GITHUB_REF_NAME="app/test/9.1.4-4"
+export GITHUB_REF="refs/tags/${GITHUB_REF_NAME}"
+export GITHUB_REF_TYPE="branch"
+export GITHUB_SHA="243aec0cd59ddf092f3365ff7b617187fc924b86"
+
+export CHART_SRC_DIR="src"
+export DOC_SRC_DIR="doc"
+# export PUBLISH_HELM_REPO_URL="https://www.google.com"
+
+# So we can easily identify what's what and not mix things up
+export SRC_REPO_DIR="src"
+export TGT_REPO_DIR="tgt"
+
+# We define this here just so we can keep all our step definitions
+# consistent with the check for its value
+export EXIT="false"
+
+GITHUB_ENV="$(mktemp)"
+
+cleanup()
+{
+	[ -v GITHUB_ENV ] && rm -rf "${GITHUB_ENV}"
+}
+
+I=0
+
+gh()
+{
+   echo '{ "html_url" : "https://arkcase.github.io/ark_helm_charts/" }'
+}
+
+git()
+{
+	echo "git ${@@Q}"
+}
+
+helm()
+{
+	echo "helm ${@@Q}"
+	case "${1:-}" in
+		package ) echo "Packaged to: ${CHART_TGT_DIR}/${CHART_NAME}-${VERSION}.tgz"
+	esac
+}
+
+find()
+{
+	echo "find ${@@Q}"
+}
+
+tar()
+{
+	echo "tar ${@@Q}"
+}
+
+(( ++I ))
+(
+    echo "BLOCK "${I}""
+	. "${GITHUB_ENV}"
+
+          git checkout main repository
+
+) || exit ${?}
+
+(( ++I ))
+(
+    echo "BLOCK "${I}""
+	. "${GITHUB_ENV}"
+
+          set -euo pipefail
+          if [[ ! "${GITHUB_REF}" =~ ^refs/tags/(([^/]+)/([^/]+)/([^/]+))$ ]] ; then
+              echo "This tag type is not supported: ${GITHUB_REF}"
+              echo "EXIT=true" >> "${GITHUB_ENV}"
+              exit 0
+          fi
+
+          FULL_TAG="${BASH_REMATCH[1]}"
+
+          # The name of the chart (relative to the src/ directory, no "/" allowed in the name)
+          CHART_NAME="${BASH_REMATCH[2]}"
+
+          # The type of release: test/release
+          RELEASE_TYPE="${BASH_REMATCH[3]}"
+
+          # The version being released
+          VERSION="${BASH_REMATCH[4]}"
+
+          VERSION_RE='^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)([.](0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?([+]([0-9a-zA-Z-]+([.][0-9a-zA-Z-]+)*))?$'
+          if [[ ! "${VERSION}" =~ ${VERSION_RE} ]] ; then
+              echo "Invalid version number [${VERSION}] - must match SemVer rules: /${VERSION_RE}/"
+              exit 1
+          fi
+
+          MAJOR="${BASH_REMATCH[1]}"
+          MINOR="${BASH_REMATCH[2]}"
+          PATCH="${BASH_REMATCH[3]}"
+          PRE_RELEASE="${BASH_REMATCH[5]}"
+          BUILD_METADATA="${BASH_REMATCH[10]}"
+
+          if [ -n "${PRE_RELEASE}" ] ; then
+              VERSION_TYPE="test"
+          else
+              VERSION_TYPE="release"
+          fi
+
+          if [ "${VERSION_TYPE}" != "${RELEASE_TYPE}" ] ; then
+              echo "The version number ${VERSION} may only be used for ${VERSION_TYPE} releases, not for ${RELEASE_TYPE} releases."
+              exit 1
+          fi
+          for VAR in CHART_SRC_DIR CHART_TGT_DIR ; do
+              if [ -v "${VAR}" ] && [ -n "${!VAR}" ] ; then
+                  # Validate that the path doesn't have "." or ".." elements
+                  case "${!VAR}" in
+                      /* ) echo "The ${VAR} value may not be an absolute path" ; exit 1 ;;
+                      .. | ../* | */.. | */../* ) echo "The ${VAR} value may not contain '..' elements" ; exit 1 ;;
+                      * ) ;;
+                  esac
+              else
+                  declare -x "${VAR}=."
+              fi
+          done
+
+          # Everything looks good ... three more variables to compute
+          CHART_SRC_DIR="${SRC_REPO_DIR}/${CHART_SRC_DIR}"
+          CHART_TGT_DIR="${TGT_REPO_DIR}/${CHART_TGT_DIR}"
+          CHART_TGT_FILE="${CHART_NAME}-${VERSION}.tgz"
+
+          # Export all the computed variables in their exact current values
+          echo "All parameters appear to be valid"
+          for VAR in FULL_TAG CHART_NAME RELEASE_TYPE VERSION MAJOR MINOR PATCH PRE_RELEASE BUILD_METADATA CHART_SRC_DIR CHART_TGT_DIR CHART_TGT_FILE ; do
+              echo "${VAR}=${!VAR@Q}" | tee -a "${GITHUB_ENV}"
+          done
+
+) || exit ${?}
+
+(( ++I ))
+(
+    echo "BLOCK "${I}""
+	. "${GITHUB_ENV}"
+
+          git checkout gh-pages branch
+
+) || exit ${?}
+
+(( ++I ))
+(
+    echo "BLOCK "${I}""
+	. "${GITHUB_ENV}"
+
+          echo "Install Helm"
+
+) || exit ${?}
+
+(( ++I ))
+(
+    echo "BLOCK "${I}""
+	. "${GITHUB_ENV}"
+
+          set -euo pipefail
+          if ! OUT="$(helm package --destination "${CHART_TGT_DIR}" --dependency-update "${CHART_SRC_DIR}/${CHART_NAME}" 2>&1)" ; then
+              echo "Failed to package the chart: ${OUT}"
+              exit 1
+          fi
+
+          # Packaging complete, get the name of the file packaged
+          OUT_RE='^.*to: (.*[.]tgz)$'
+          if [[ ! "${OUT}" =~ ${OUT_RE} ]] ; then
+              echo "Unexpected output from 'helm package': ${OUT}"
+              exit 1
+          fi
+          PACKAGED_CHART="$(basename "${BASH_REMATCH[1]}")"
+
+          # The packaged chart should be in the file "${CHART_TGT_DIR}/${CHART_NAME}-${VERSION}.tgz"
+          CHART_FILE="${CHART_NAME}-${VERSION}.tgz"
+          if [ "${PACKAGED_CHART}" != "${CHART_FILE}" ] ; then
+              echo "The packaged chart's name (${PACKAGED_CHART}) did not match the expected name (${CHART_FILE})"
+              exit 1
+          fi
+
+          # Update the repository index
+          [ -v PUBLISH_HELM_REPO_URL ] || PUBLISH_HELM_REPO_URL=""
+          [ -n "${PUBLISH_HELM_REPO_URL}" ] || PUBLISH_HELM_REPO_URL="$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.html_url')"
+          helm repo index --url "${PUBLISH_HELM_REPO_URL}" "${CHART_TGT_DIR}"
+
+) || exit ${?}
+
+(( ++I ))
+(
+    echo "BLOCK "${I}""
+	. "${GITHUB_ENV}"
+
+          set -euo pipefail
+
+          # Add the documentation, if needed
+          DOC_SRC_DIR="${SRC_REPO_DIR}/${DOC_SRC_DIR}"
+          [ -d "${DOC_SRC_DIR}" ] || exit 0
+
+          echo "Copying the documentation"
+          ( cd "${DOC_SRC_DIR}" && tar -cf - . ) | tar -C "${TGT_REPO_DIR}" -xvf -
+
+) || exit ${?}
+
+(( ++I ))
+(
+    echo "BLOCK "${I}""
+	. "${GITHUB_ENV}"
+
+          set -euo pipefail
+          cd "${TGT_REPO_DIR}"
+          git add .
+          git commit -m "Publishing ${CHART_NAME}-${VERSION}"
+          git push
+
+) || exit ${?}
