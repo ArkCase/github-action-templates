@@ -59,6 +59,9 @@ env:
   # consistent with the check for its value
   EXIT: "false"
 
+  # Initial state
+  DELETE_TAG: "true"
+
 jobs:
   publish-helm-chart:
     runs-on: ubuntu-latest
@@ -168,6 +171,7 @@ jobs:
 
           if [ -e "${CHART_TGT_DIR}/${CHART_TGT_FILE}" ] ; then
               echo "Version ${VERSION} of chart [${CHART_NAME}] has already been published. Overwrite is not allowed."
+              echo "DELETE_TAG=false" >> "${GITHUB_ENV}"
               exit 1
           fi
 
@@ -235,4 +239,8 @@ jobs:
         if: failure()
         run: |
           set -euo pipefail
-          git -C "${SRC_REPO_DIR}" push --delete origin "${GITHUB_REF}"
+          if [ "${DELETE_TAG:-}" == "true" ] ; then
+              git -C "${SRC_REPO_DIR}" push --delete origin "${GITHUB_REF}"
+          else
+              echo "Tag deletion has been bypassed"
+          fi
