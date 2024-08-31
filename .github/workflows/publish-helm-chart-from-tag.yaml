@@ -129,6 +129,7 @@ jobs:
               echo "The version number ${VERSION} may only be used for ${VERSION_TYPE} releases, not for ${RELEASE_TYPE} releases."
               exit 1
           fi
+
           for VAR in CHART_DIR PUBLIC_DIR ; do
               if [ -v "${VAR}" ] && [ -n "${!VAR}" ] ; then
                   # Validate that the path doesn't have "." or ".." elements
@@ -206,7 +207,7 @@ jobs:
           helm repo index --url "${HELM_REPO_URL}" "${CHART_TGT_DIR}"
 
       - name: Copy any documentation updates
-        if: ${{ env.EXIT == 'false' }}
+        if: ${{ (env.EXIT == 'false') && (env.RELEASE_TYPE == 'release') }}
         env:
           DOC_DIR: ${{ inputs.doc-dir }}
         run: |
