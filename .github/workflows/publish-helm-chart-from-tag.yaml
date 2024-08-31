@@ -83,17 +83,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ ! "${GITHUB_REF}" =~ ^refs/tags/(([^/]+)/([^/]+)/([^/]+))$ ]] ; then
-              echo "This tag type is not supported: ${GITHUB_REF}"
-              echo "It must match the format ${CHART_NAME}/${TYPE}/${VERSION}"
-              echo ""
-              echo "Where:"
-              echo "    ${CHART_NAME} is the name of the chart, with no slashes".
-              echo "    ${TYPE} is either 'test' or 'release'"
-              echo "    ${VERSION} is consistent with Semantic Versioning (https://semver.org/)"
-              echo ""
-              echo "Versions with pre-release components may only be associated with test tags,"
-              echo "and versions without pre-release components may only be associated with"
-              echo "release tags."
+              echo "This ref type is not supported for triggering a Chart publication: ${GITHUB_REF}"
               echo "EXIT=true" >> "${GITHUB_ENV}"
               exit 0
           fi
