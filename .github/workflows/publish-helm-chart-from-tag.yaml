@@ -60,7 +60,7 @@ jobs:
         if: ${{ env.EXIT == 'false' }}
         uses: actions/checkout@v4
         with:
-          path: "${SRC_REPO_DIR}"
+          path: ${{ env.SRC_REPO_DIR }}
 
       - name: Validate the execution
         if: ${{ env.EXIT == 'false' }}
@@ -144,7 +144,7 @@ jobs:
         if: ${{ env.EXIT == 'false' }}
         uses: actions/checkout@v4
         with:
-          path: "${TGT_REPO_DIR}"
+          path: ${{ env.TGT_REPO_DIR }}
           ref: "gh-pages"
 
       - name: Install Helm
