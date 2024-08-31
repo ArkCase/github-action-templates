@@ -38,6 +38,16 @@ on:
         required: false
         default: ""
         type: string
+      publisher-name:
+        description: "The username to record with the publishing commit to the public branch"
+        required: false
+        default: ""
+        type: string
+      publisher-email:
+        description: "The email to record with the publishing commit to the public branch"
+        required: false
+        default: ""
+        type: string
 
 env:
 
@@ -207,12 +217,16 @@ jobs:
 
       - name: Publish the chart & doc changes
         if: ${{ env.EXIT == 'false' }}
+        env:
+          PUBLISHER_NAME: ${{ inputs.publisher-name }}
+          PUBLISHER_EMAIL: ${{ inputs.publisher-email }}
         run: |
           set -euo pipefail
+          [ -n "${PUBLISHER_EMAIL}" ] || PUBLISHER_NAME="${GITHUB_TRIGGERING_ACTOR}"
+          [ -n "${PUBLISHER_NAME}" ] || PUBLISHER_EMAIL="${GITHUB_TRIGGERING_ACTOR}[bot]@workflow.github.com"
           cd "${TGT_REPO_DIR}"
-          env
-          # git config --global user.email "you@example.com"
-          # git config --global user.name "${GITHUB_TRIGGERING_ACTOR}"
+          git config --global user.name "${PUBLISHER_NAME}"
+          git config --global user.email "${PUBLISHER_EMAIL}"
           git add .
           git commit -m "Publishing ${CHART_NAME}-${VERSION}"
           git push
