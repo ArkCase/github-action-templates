@@ -210,6 +210,9 @@ jobs:
         run: |
           set -euo pipefail
           cd "${TGT_REPO_DIR}"
+          env
+          # git config --global user.email "you@example.com"
+          # git config --global user.name "${GITHUB_TRIGGERING_ACTOR}"
           git add .
           git commit -m "Publishing ${CHART_NAME}-${VERSION}"
           git push
