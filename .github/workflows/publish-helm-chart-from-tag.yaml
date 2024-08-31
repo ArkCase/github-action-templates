@@ -155,6 +155,7 @@ jobs:
         if: ${{ env.EXIT == 'false' }}
         env:
           HELM_REPO_URL: ${{ inputs.helm-repo-url }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
