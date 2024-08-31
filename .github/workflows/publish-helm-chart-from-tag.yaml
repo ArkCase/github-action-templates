@@ -1,11 +1,11 @@
 #
 # The expected tag format is: ${CHART_NAME}/${TYPE}/${VERSION}
 #
-# ${CHART_NAME} == the chart name (no slashes!!) will be taken as relative to the ${CHART_DIR} directory!
-#             If ${CHART_DIR} is blank or not specified, it will be defaulted to ".". The ${CHART_DIR}
+# ${CHART_NAME} == the chart name (no slashes!!) will be taken as relative to the ${chart_dir} directory!
+#             If ${chart_dir} is blank or not specified, it will be defaulted to ".". The ${chart_dir}
 #             directory in turn must be relative to the root of the checkout. The final chart packaged will be
-#             expected to be packaged as "${PUBLIC_DIR}/${CHART_NAME}-${VERSION}.tgz", relative to the root
-#             of the target repository checkout. If CHART_DIR or PUBLIC_DIR are not specified, or are empty,
+#             expected to be packaged as "${public_dir}/${CHART_NAME}-${VERSION}.tgz", relative to the root
+#             of the target repository checkout. If chart_dir or public_dir are not specified, or are empty,
 #             they will be defaulted to ".".
 #
 # ${RELEASE_TYPE}" == the type of release: a "release" (i.e. final version of a chart) or a "test" (i.e. a pre-release chart)
@@ -18,17 +18,22 @@ name: Publish a Helm Chart based on tags
 on:
   workflow_call:
     inputs:
-      CHART_DIR:
+      chart_dir:
         description: "The directory within the source tree where the chart's directory is to be found"
         required: false
         default: "."
         type: string
-      DOC_DIR:
+      public_dir:
+        description: "The directory within the public branch where the root of the public contents are found"
+        required: false
+        default: "."
+        type: string
+      doc_dir:
         description: "The directory within the source tree where the publishable documentation is to be found"
         required: false
         default: "."
         type: string
-      PUBLISH_HELM_REPO_URL:
+      helm_repo_url:
         description: "The URL with which to update the repository index on publishing (generally auto-computed)"
         required: false
         default: ""
@@ -60,7 +65,8 @@ jobs:
       - name: Validate the execution
         if: ${{ env.EXIT == 'false' }}
         env:
-          CHART_DIR: ${{ inputs.CHART_DIR }}
+          CHART_DIR: ${{ inputs.chart_dir }}
+          PUBLIC_DIR: ${{ inputs.public_dir }}
         run: |
           set -euo pipefail
           if [[ ! "${GITHUB_REF}" =~ ^refs/tags/(([^/]+)/([^/]+)/([^/]+))$ ]] ; then
@@ -148,7 +154,7 @@ jobs:
       - name: Package the Chart
         if: ${{ env.EXIT == 'false' }}
         env:
-          PUBLISH_HELM_REPO_URL: ${{ inputs.PUBLISH_HELM_REPO_URL }}
+          HELM_REPO_URL: ${{ inputs.helm_repo_url }}
         run: |
           set -euo pipefail
 
@@ -178,13 +184,13 @@ jobs:
           fi
 
           # Update the repository index
-          [ -n "${PUBLISH_HELM_REPO_URL}" ] || PUBLISH_HELM_REPO_URL="$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.html_url')"
-          helm repo index --url "${PUBLISH_HELM_REPO_URL}" "${CHART_TGT_DIR}"
+          [ -n "${HELM_REPO_URL}" ] || HELM_REPO_URL="$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.html_url')"
+          helm repo index --url "${HELM_REPO_URL}" "${CHART_TGT_DIR}"
 
       - name: Copy any documentation updates
         if: ${{ env.EXIT == 'false' }}
         env:
-          DOC_DIR: ${{ inputs.DOC_DIR }}
+          DOC_DIR: ${{ inputs.doc_dir }}
         run: |
           set -euo pipefail
 
@@ -206,4 +212,6 @@ jobs:
 
       - name: Cleaning up after a failed run
         if: failure()
-        uses: prompt/actions-delete-tag@v1
+        run: |
+          set -euo pipefail
+          git -C "${SRC_REPO_DIR}" push --delete origin "${GITHUB_REF}"
