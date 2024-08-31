@@ -163,6 +163,9 @@ jobs:
               exit 1
           fi
 
+          ls -l "${SRC_REPO_DIR}"
+          ls -l "${TGT_REPO_DIR}"
+
           if ! OUT="$(helm package --destination "${CHART_TGT_DIR}" --dependency-update "${CHART_SRC_DIR}/${CHART_NAME}" 2>&1)" ; then
               echo "Failed to package the chart: ${OUT}"
               exit 1
