@@ -153,9 +153,6 @@ jobs:
 
       - name: Package the Chart
         if: ${{ env.EXIT == 'false' }}
-        env:
-          HELM_REPO_URL: ${{ inputs.helm-repo-url }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
@@ -184,7 +181,13 @@ jobs:
               exit 1
           fi
 
-          # Update the repository index
+      - name: Update the repository index
+        if: ${{ env.EXIT == 'false' }}
+        env:
+          HELM_REPO_URL: ${{ inputs.helm-repo-url }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
           [ -n "${HELM_REPO_URL}" ] || HELM_REPO_URL="$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.html_url')"
           helm repo index --url "${HELM_REPO_URL}" "${CHART_TGT_DIR}"
 
