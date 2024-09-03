@@ -51,7 +51,7 @@ on:
 
     secrets:
       RELEASE_WORKFLOW_PAT:
-        required: false
+        required: true
 
 env:
 
