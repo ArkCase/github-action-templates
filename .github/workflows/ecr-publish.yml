@@ -10,6 +10,11 @@ on:
         description: "The ArkCase version to use for construction (computed from the Dockerfile if not provided)"
         required: false
         type: string
+      reports-bucket:
+        description: "The bucket into which the OSCAP and Trivy reports will be uploaded into (defaults to 'arkcase-container-scan-results')"
+        required: false
+        type: string
+        default: "arkcase-container-scan-results"
     secrets:
       ECR_AWS_REGION:
         required: true
@@ -44,6 +49,8 @@ env:
   ECR_AWS_REGION: ${{ secrets.ECR_AWS_REGION }}
   ECR_AWS_ORG_ID: ${{ secrets.ECR_AWS_ORG_ID }}
   GH_TOKEN: ${{ github.token }}
+
+  REPORTS_BUCKET: ${{ inputs.reports-bucket }}
 
 jobs:
   ECR-Publishing:
@@ -564,6 +571,59 @@ jobs:
               # Tags for GIT must be the *real* revision, with "+" instead of "_"
               git tag --force "${PREFIX}/${R//_/+}"
           done
+
+          REPORT_PATH="${IMAGE_URI}/${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}/b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
+          echo "REPORT_PATH=${REPORT_PATH@Q}" >> .env
+
+      - name: Analyze STIG compliance
+        run: |
+          source .env
+          cat .env
+
+          # TODO: Install the OSCAP scanners (openscap-utils)
+          # TODO: Install the SCAP security guide
+ 
+          REPORT_FILE="compliance.html"
+          REPORT_TARGET="${REPORT_PATH}/${REPORT_FILE}"
+
+          PROFILE="xccdf_mil.disa.stig_profile_MAC-2_Sensitive"
+          # TODO: identify this file
+          STIG_FILE="....."
+
+          echo "Launching the OSCAP Scan"
+          oscap-docker "${CONTAINER_IMAGE}" \
+              xccdf eval \
+              --report "${REPORT_FILE}" \
+              --profile "${PROFILE}" \
+              "${STIG_FILE}"
+
+          aws s3 cp \
+              --region "${ECR_AWS_REGION}" \
+              "${REPORT_FILE}" "s3://${REPORTS_BUCKET}/${REPORT_TARGET}"
+
+      - name: Scan for Vulnerabilities
+        run: |
+          source .env
+          cat .env
+
+          # TODO: Install the Trivy scanner
+
+          REPORT_NAME="vulnerabilities.html"
+          REPORT_TARGET="${REPORT_PATH}/${REPORT_NAME}"
+
+          # TODO: Run the trivy security scan
+
+          aws s3 cp \
+              --region "${ECR_AWS_REGION}" \
+              "${REPORT_FILE}" "s3://${REPORTS_BUCKET}/${REPORT_TARGET}"
+
+      - name: Push the new tags
+        run: |
+          source .env
+          cat .env
+
+          # We split this up b/c if this build doesn't pass the security scan,
+          # it won't be uploaded or tagged (eventually :D)
           git push --force --tags
 
       - name: Create Private ECR Repo
