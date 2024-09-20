@@ -790,9 +790,13 @@ jobs:
       - name: Scan for Vulnerabilities
         if: ${{ env.SCAN_VULN == 'true' }}
         continue-on-error: ${{ env.VULN_SCAN_REQUIRED != 'true' }}
-        uses: aquasecurity/trivy-action@0.20.0
+        uses: aquasecurity/trivy-action@0.24.0
         with:
           image-ref: ${{ env.SCAN_CONTAINER_IMAGE }}
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
           format: "sarif"
           output: ${{ env.VULN_REPORT }}
           timeout: ${{ env.SCAN_VULN_TIMEOUT }}
