@@ -78,7 +78,7 @@ env:
   SCAN_COMP: ${{ inputs.compliance-scan }}
   SCAN_COMP_REQUIRED: ${{ inputs.compliance-required }}
   # TODO: Make this configurable via input?
-  SCAN_COMP_TIMEOUT: "5m"
+  SCAN_COMP_TIMEOUT: ""
 
   # Enable/disable Vulnerability Scans
   SCAN_VULN: ${{ inputs.vulnerabilities-scan }}
@@ -795,18 +795,25 @@ jobs:
 
           echo "Launching the OSCAP Scan"
 
+          CMD=(
+              oscap-docker
+                  image "${SCAN_CONTAINER_IMAGE}"
+                  xccdf eval
+                  --verbose ERROR
+                  --profile "${PROFILE}"
+                  --results "${COMP_REPORT_XML_SOURCE}"
+                  --report "${COMP_REPORT_HTML_SOURCE}"
+                  "${SSG_FILE}"
+          )
+
+          # If we've chosen to have a timeout, then let's add it up front
+          [ -n "${SCAN_COMP_TIMEOUT:-}" ] && \
+              CMD=( timeout --verbose --signal=KILL "${SCAN_COMP_TIMEOUT}" "${CMD[@]}" )
+
+          # Run the command!
           OSCAP_EXIT_CODE=0
           COMP_SCAN_ATTEMPTED="true"
-          timeout --verbose --signal=KILL "${SCAN_COMP_TIMEOUT}" \
-              oscap-docker \
-                  image "${SCAN_CONTAINER_IMAGE}" \
-                  xccdf eval \
-                  --verbose ERROR \
-                  --profile "${PROFILE}" \
-                  --results "${COMP_REPORT_XML_SOURCE}" \
-                  --report "${COMP_REPORT_HTML_SOURCE}" \
-                  "${SSG_FILE}" || OSCAP_EXIT_CODE=${?}
- 
+          "${CMD[@]}" || OSCAP_EXIT_CODE=${?}
           COMP_SCAN_COMPLETED="false"
           COMP_SCAN_OK="false"
           case "${OSCAP_EXIT_CODE}" in
