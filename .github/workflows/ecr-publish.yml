@@ -11,10 +11,10 @@ on:
         required: false
         type: string
       reports-bucket:
-        description: "The bucket into which to upload the STIG Compliance and Vulnerability reports (defaults to 'arkcase-container-results-scan')"
+        description: "The bucket into which to upload the STIG Compliance and Vulnerability reports (defaults to 'arkcase-container-scan-results')"
         required: false
         type: string
-        default: "arkcase-container-results-scan"
+        default: "arkcase-container-scan-results"
 
       compliance-scan:
         description: "Whether or not to scan for STIG compliance on the build"
@@ -656,7 +656,7 @@ jobs:
           (
               set -euo pipefail
 
-              apt-get install libopenscap8
+              sudo apt-get install -y libopenscap8
 
               #
               # Install the pre-requisites
