@@ -797,9 +797,8 @@ jobs:
           ignore-unfixed: true
           vuln-type: "os,library"
           severity: "CRITICAL,HIGH"
-          format: "template"
-          template: "@/contrig/sarif.tpl"
-          output: ${{ env.VULN_REPORT }}
+          format: "sarif"
+          output: ${{ env.VULN_REPORT_SOURCE }}
           timeout: ${{ env.SCAN_VULN_TIMEOUT }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.ECR_AWS_ACCESS_KEY }}
