@@ -797,7 +797,8 @@ jobs:
           ignore-unfixed: true
           vuln-type: "os,library"
           severity: "CRITICAL,HIGH"
-          format: "sarif"
+          format: "template"
+          template: "@/contrig/sarif.tpl"
           output: ${{ env.VULN_REPORT }}
           timeout: ${{ env.SCAN_VULN_TIMEOUT }}
         env:
