@@ -11,10 +11,34 @@ on:
         required: false
         type: string
       reports-bucket:
-        description: "The bucket into which the OSCAP and Trivy reports will be uploaded into (defaults to 'arkcase-container-scan-results')"
+        description: "The bucket into which to upload the STIG Compliance and Vulnerability reports (defaults to 'arkcase-container-results-scan')"
         required: false
         type: string
-        default: "arkcase-container-scan-results"
+        default: "arkcase-container-results-scan"
+
+      compliance-scan:
+        description: "Whether or not to scan for STIG compliance on the build"
+        required: false
+        type: boolean
+        # Start of false, for testing...
+        default: false
+      compliance-required:
+        description: "Whether or not to require full STIG compliance to approve the build (default false)"
+        required: false
+        type: boolean
+        default: false
+
+      vulnerabilities-scan:
+        description: "Whether or not to scan for vulnerabilities on the build"
+        required: false
+        type: boolean
+        default: true
+      vulnerabilities-required:
+        description: "Whether or not to require no CRIT or HIGH vulnerabilities to approve the build (default false)"
+        required: false
+        type: boolean
+        default: false
+
     secrets:
       ECR_AWS_REGION:
         required: true
@@ -50,7 +74,17 @@ env:
   ECR_AWS_ORG_ID: ${{ secrets.ECR_AWS_ORG_ID }}
   GH_TOKEN: ${{ github.token }}
 
-  REPORTS_BUCKET: ${{ inputs.reports-bucket }}
+  # Enable/disable STIG Compliance Scans
+  SCAN_COMP: ${{ inputs.compliance-scan }}
+  SCAN_COMP_REQUIRED: ${{ inputs.compliance-required }}
+  # TODO: Make this configurable via input?
+  SCAN_COMP_TIMEOUT: "5m"
+
+  # Enable/disable Vulnerability Scans
+  SCAN_VULN: ${{ inputs.vulnerabilities-scan }}
+  SCAN_VULN_REQUIRED: ${{ inputs.vulnerabilities-required }}
+  # TODO: Make this configurable via input?
+  SCAN_VULN_TIMEOUT: "5m"
 
 jobs:
   ECR-Publishing:
@@ -572,50 +606,217 @@ jobs:
               git tag --force "${PREFIX}/${R//_/+}"
           done
 
-          REPORT_PATH="${IMAGE_URI}/${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}/b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
-          echo "REPORT_PATH=${REPORT_PATH@Q}" >> .env
+          REPORT_TARGET_PATH="${IMAGE_URI}/${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}/b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
+          echo "REPORT_TARGET_PATH=${REPORT_TARGET_PATH@Q}" >> .env
 
-      - name: Analyze STIG compliance
+          # Set some variables we'll need to consume later on
+          echo "SCAN_CONTAINER_IMAGE=${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${LATEST_REVISION}" >> "${GITHUB_ENV}"
+          echo "REPORT_TARGET_PATH=${REPORT_TARGET_PATH}" >> "${GITHUB_ENV}"
+
+          echo "COMP_REPORT_XML_SOURCE=compliance.xml" >> "${GITHUB_ENV}"
+          echo "COMP_REPORT_XML_TARGET=${REPORT_TARGET_PATH}/${COMP_REPORT_XML_SOURCE}" >> "${GITHUB_ENV}"
+          echo "COMP_REPORT_HTML_SOURCE=compliance.html" >> "${GITHUB_ENV}"
+          echo "COMP_REPORT_HTML_TARGET=${REPORT_TARGET_PATH}/${COMP_REPORT_HTML_SOURCE}" >> "${GITHUB_ENV}"
+
+          echo "VULN_REPORT_SOURCE=vulnerabilities.sarif" >> "${GITHUB_ENV}"
+          echo "VULN_REPORT_TARGET=${REPORT_TARGET_PATH}/${VULN_REPORT_SOURCE}" >> "${GITHUB_ENV}"
+
+      - name: Analyze STIG Compliance
+        if: ${{ env.SCAN_COMP == 'true' }}
+        continue-on-error: ${{ env.COMP_SCAN_REQUIRED != 'true' }}
+        env:
+          SCAP_SECURITY_GUIDE_VERSION: "0.1.74"
+          MICROSOFT_SARIF_MULTITOOL_VERSION: "4.5.4"
+          MITRE_SAF_VERSION: "1.4.12"
+          SSG_DIR: "ssg"
         run: |
           source .env
           cat .env
 
-          # TODO: Install the OSCAP scanners (openscap-utils)
-          # TODO: Install the SCAP security guide
- 
-          REPORT_FILE="compliance.html"
-          REPORT_TARGET="${REPORT_PATH}/${REPORT_FILE}"
+          set -euo pipefail
 
-          PROFILE="xccdf_mil.disa.stig_profile_MAC-2_Sensitive"
-          # TODO: identify this file
-          STIG_FILE="....."
+          RC=0
+          (
+              set -euo pipefail
+
+              apt-get install libopenscap8
+
+              #
+              # Install the pre-requisites
+              #
+
+              npm install -g "@microsoft/sarif-multitool@${MICROSOFT_SARIF_MULTITOOL_VERSION}"
+              npm install -g "@mitre/saf@${MITRE_SAF_VERSION}"
+
+              mkdir -p "${SSG_DIR}"
+              curl -L "https://github.com/ComplianceAsCode/content/releases/download/v${SCAP_SECURITY_GUIDE_VERSION}/scap-security-guide-${SCAP_SECURITY_GUIDE_VERSION}.zip" -Lso "${SSG_DIR}/ssg.zip"
+              unzip "${SSG_DIR}/ssg.zip" -d "${SSG_DIR}"
+
+              echo "Pre-requisites installed!"
+          ) || RC=${?}
+
+          if [ ${RC} -ne 0 ] ; then
+              echo "Failed to install the pre-requisites to execute the STIG compliance scanning"
+              echo "COMP_SCAN_ATTEMPTED=false" >> "${GITHUB_ENV}"
+              echo "COMP_SCAN_COMPLETED=false" >> "${GITHUB_ENV}"
+              echo "COMP_SCAN_OK=false" >> "${GITHUB_ENV}"
+              exit 0
+          fi
+
+          # extract /etc/os-release from the container image
+          CONTAINER_ID=$(docker create --pull never "${SCAN_CONTAINER_IMAGE}")
+
+          COPY_RESULT=0
+          docker cp -L "${CONTAINER_ID}:/etc/os-release" . || COPY_RESULT="${?}"
+          docker rm "${CONTAINER_ID}" &>/dev/null || true
+          unset CONTAINER_ID
+
+          if [ ${COPY_RESULT} -ne 0 ] ; then
+              echo "The operating system used by ${SCAN_CONTAINER_IMAGE} could not be detected."
+              echo "Images that are not based on an operating system (such as distroless images) cannot be scanned by SCAP."
+              echo "COMP_SCAN_ATTEMPTED=false" >> "${GITHUB_ENV}"
+              echo "COMP_SCAN_COMPLETED=false" >> "${GITHUB_ENV}"
+              echo "COMP_SCAN_OK=false" >> "${GITHUB_ENV}"
+              exit 0
+          fi
+
+          # determine which ssg to use based on /etc/os-release
+          # see https://www.freedesktop.org/software/systemd/man/os-release.html
+          OS_VERSION=$(awk -F= '$1=="VERSION_ID" { print $2 ;}' os-release | sed 's/"//g')
+          OD_ID=$(awk -F= '$1=="ID" { print $2 ;}' os-release | sed 's/"//g')
+          if [ "${OD_ID}" == "ubuntu" ] && echo "${OS_VERSION}" | grep -qE '^18\.04(\..*)?$' ; then
+              SSG_FILE="ssg-ubuntu1804-ds.xml"
+          elif [ "${OS_ID}" == "ubuntu" ] && echo "${OS_VERSION}" | grep -qE '^20\.04(\..*)?$' ; then
+              SSG_FILE="ssg-ubuntu2004-ds.xml"
+          elif [ "${OS_ID}" == "ubuntu" ] && echo "${OS_VERSION}" | grep -qE '^22\.04(\..*)?$' ; then
+              SSG_FILE="ssg-ubuntu2204-ds.xml"
+          elif [ "${OS_ID}" == "centos" ] && echo "${OS_VERSION}" | grep -qE '^7(\..*)?$' ; then
+              SSG_FILE="ssg-centos7-ds.xml"
+          elif [ "${OS_ID}" == "centos" ] && echo "${OS_VERSION}" | grep -qE '^8(\..*)?$' ; then
+              SSG_FILE="ssg-centos8-ds.xml"
+          elif [ "${OS_ID}" == "ol" ] && echo "${OS_VERSION}" | grep -qE '^7(\..*)?$' ; then
+              SSG_FILE="ssg-ol7-ds.xml"
+          elif [ "${OS_ID}" == "ol" ] && echo "${OS_VERSION}" | grep -qE '^8(\..*)?$' ; then
+              SSG_FILE="ssg-ol8-ds.xml"
+          elif [ "${OS_ID}" == "ol" ] && echo "${OS_VERSION}" | grep -qE '^9(\..*)?$' ; then
+              SSG_FILE="ssg-ol9-ds.xml"
+          elif [ "${OS_ID}" == "rhel" ] && echo "${OS_VERSION}" | grep -qE '^7(\..*)?$' ; then
+              SSG_FILE="ssg-rhel7-ds.xml"
+          elif [ "${OS_ID}" == "rhel" ] && echo "${OS_VERSION}" | grep -qE '^8(\..*)?$' ; then
+              SSG_FILE="ssg-rhel8-ds.xml"
+          elif [ "${OS_ID}" == "rhel" ] && echo "${OS_VERSION}" | grep -qE '^9(\..*)?$' ; then
+              SSG_FILE="ssg-rhel9-ds.xml"
+          elif [ "${OS_ID}" == "sles" ] && echo "${OS_VERSION}" | grep -qE '^12(\..*)?$' ; then
+              SSG_FILE="ssg-sle12-ds.xml"
+          elif [ "${OS_ID}" == "sles" ] && echo "${OS_VERSION}" | grep -qE '^15(\..*)?$' ; then
+              SSG_FILE="ssg-sle15-ds.xml"
+          else
+              echo "There is no STIG configuration file available for ${OS_ID} ${OS_VERSION}"
+              echo "COMP_SCAN_ATTEMPTED=false" >> "${GITHUB_ENV}"
+              echo "COMP_SCAN_COMPLETED=false" >> "${GITHUB_ENV}"
+              echo "COMP_SCAN_OK=false" >> "${GITHUB_ENV}"
+              exit 0
+          fi
+
+          # This will be the path to our SSG file
+          SSG_FILE="scap-security-guide-${SCAP_SECURITY_GUIDE_VERSION}/${SSG_FILE}"
+
+          # Select the profile to use. The first profile that exists in the ssg is used.
+          PROFILES=(
+              xccdf_org.ssgproject.content_profile_cis_level2_server
+              xccdf_org.ssgproject.content_profile_cis
+              xccdf_org.ssgproject.content_profile_standard
+          )
+
+          PROFILE=""
+          for P in "${PROFILES[@]}" ; do
+              oscap info --profiles "${SSG_DIR}/${SSG_FILE}" | grep -qF "${P}:" || continue
+              PROFILE="${P}"
+              echo "Selected STIG profile: [${PROFILE}]"
+              break
+          done
+
+          if [ -z "${PROFILE}" ] ; then
+              echo "Failed to find any of the candidate profiles referenced in the STIG file [${SSG_FILE}]: ${PROFILES[@]}"
+              echo "COMP_SCAN_ATTEMPTED=false" >> "${GITHUB_ENV}"
+              echo "COMP_SCAN_COMPLETED=false" >> "${GITHUB_ENV}"
+              echo "COMP_SCAN_OK=false" >> "${GITHUB_ENV}"
+              exit 0
+          fi
 
           echo "Launching the OSCAP Scan"
-          oscap-docker "${CONTAINER_IMAGE}" \
-              xccdf eval \
-              --report "${REPORT_FILE}" \
-              --profile "${PROFILE}" \
-              "${STIG_FILE}"
 
-          aws s3 cp \
-              --region "${ECR_AWS_REGION}" \
-              "${REPORT_FILE}" "s3://${REPORTS_BUCKET}/${REPORT_TARGET}"
+          OSCAP_EXIT_CODE=0
+          COMP_SCAN_ATTEMPTED="true"
+          timeout --verbose --signal=KILL "${SCAN_COMP_TIMEOUT}" \
+              oscap-docker \
+                  image "${SCAN_CONTAINER_IMAGE}" \
+                  xccdf eval \
+                  --verbose ERROR \
+                  --profile "${PROFILE}" \
+                  --results "${COMP_REPORT_XML_SOURCE}" \
+                  --report "${COMP_REPORT_HTML_SOURCE}" \
+                  "${SSG_FILE}" || OSCAP_EXIT_CODE=${?}
+ 
+          COMP_SCAN_COMPLETED="false"
+          COMP_SCAN_OK="false"
+          case "${OSCAP_EXIT_CODE}" in
+              0 ) echo "All rules passed" ; COMP_SCAN_COMPLETED="true" ; COMP_SCAN_OK="true" ;;
 
-      - name: Scan for Vulnerabilities
+              1 ) echo "An error occurred during evaluation" ;;
+
+              2 ) echo "There is at least one rule with either fail or unknown result" ; COMP_SCAN_COMPLETED="true" ; COMP_SCAN_OK="false" ;;
+
+              124 ) echo "The compliance scan timed out - can't make a determination" ;;
+
+              * ) echo "openscap returned an unexpected exit status of ${OSCAP_EXIT_CODE}" ;;
+          esac
+
+          echo "COMP_SCAN_ATTEMPTED=${COMP_SCAN_ATTEMPTED}" >> "${GITHUB_ENV}"
+          echo "COMP_SCAN_COMPLETED=${COMP_SCAN_COMPLETED}" >> "${GITHUB_ENV}"
+          echo "COMP_SCAN_OK=${COMP_SCAN_OK}" >> "${GITHUB_ENV}"
+
+      - name: Upload the STIG Compliance report to S3
+        if: ${{ (env.SCAN_COMP == 'true') && (env.COMP_SCAN_ATTEMPTED == 'true') && (env.COMP_SCAN_COMPLETED == 'true') }}
+        continue-on-error: ${{ env.COMP_SCAN_REQUIRED != 'true' }}
+        env:
+          REPORTS_BUCKET: ${{ inputs.reports-bucket }}
         run: |
           source .env
           cat .env
+          aws s3 cp "${COMP_REPORT_XML_SOURCE}" "s3://${REPORTS_BUCKET}/${COMP_REPORT_XML_TARGET}"
+          aws s3 cp "${COMP_REPORT_HTML_SOURCE}" "s3://${REPORTS_BUCKET}/${COMP_REPORT_HTML_TARGET}"
 
-          # TODO: Install the Trivy scanner
+      - name: Scan for Vulnerabilities
+        if: ${{ (env.SCAN_VULN == 'true') && (env.VULN_VULN_SCAN_ATTEMPTED == 'true') && (env.VULN_SCAN_COMPLETED == 'true') }}
+        continue-on-error: ${{ env.VULN_SCAN_REQUIRED != 'true' }}
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          image-ref: ${{ env.SCAN_CONTAINER_IMAGE }}
+          format: "sarif"
+          output: ${{ env.VULN_REPORT }}
+          timeout: ${{ env.SCAN_VULN_TIMEOUT }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.ECR_AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.ECR_AWS_REGION }}
 
-          REPORT_NAME="vulnerabilities.html"
-          REPORT_TARGET="${REPORT_PATH}/${REPORT_NAME}"
+      - name: Upload the vulnerabilities report to the GitHub Security tab
+        if: ${{ env.SCAN_VULN == 'true' }}
+        continue-on-error: ${{ env.VULN_SCAN_REQUIRED != 'true' }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ env.VULN_REPORT_SOURCE }}
 
-          # TODO: Run the trivy security scan
-
-          aws s3 cp \
-              --region "${ECR_AWS_REGION}" \
-              "${REPORT_FILE}" "s3://${REPORTS_BUCKET}/${REPORT_TARGET}"
+      - name: Upload the vulnerabilities report to S3
+        if: ${{ env.SCAN_VULN == 'true' }}
+        continue-on-error: ${{ env.VULN_SCAN_REQUIRED != 'true' }}
+        env:
+          REPORTS_BUCKET: ${{ inputs.reports-bucket }}
+        run: |
+          source .env
+          cat .env
+          aws s3 cp "${VULN_REPORT_SOURCE}" "s3://${REPORTS_BUCKET}/${VULN_REPORT_TARGET}"
 
       - name: Push the new tags
         run: |
