@@ -784,6 +784,7 @@ jobs:
         run: |
           source .env
           cat .env
+          set -x
           aws s3 cp "${COMP_REPORT_XML_SOURCE}" "s3://${REPORTS_BUCKET}/${COMP_REPORT_XML_TARGET}"
           aws s3 cp "${COMP_REPORT_HTML_SOURCE}" "s3://${REPORTS_BUCKET}/${COMP_REPORT_HTML_TARGET}"
 
@@ -820,6 +821,7 @@ jobs:
         run: |
           source .env
           cat .env
+          set -x
           aws s3 cp "${VULN_REPORT_SOURCE}" "s3://${REPORTS_BUCKET}/${VULN_REPORT_TARGET}"
 
       - name: Push the new tags
