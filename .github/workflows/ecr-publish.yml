@@ -601,6 +601,7 @@ jobs:
           fi
 
           # If we want to tag the repository, do so! Clobber any existing tags!
+          echo "Creating Git tags for: ${REVISIONS[@]}"
           for R in "${REVISIONS[@]}" ; do
               # Tags for GIT must be the *real* revision, with "+" instead of "_"
               git tag --force "${PREFIX}/${R//_/+}"
@@ -634,8 +635,8 @@ jobs:
           for VAR in "${VARS[@]}" ; do
               VAL="${!VAR}"
               echo "${VAR}=${VAL@Q}" >> .env
-              "${VAR}=${VAL}"
-          done >> "${GITHUB_ENV}"
+              echo "${VAR}=${VAL}" >> "${GITHUB_ENV}"
+          done
 
       - name: Analyze STIG Compliance
         if: ${{ env.SCAN_COMP == 'true' }}
