@@ -606,20 +606,36 @@ jobs:
               git tag --force "${PREFIX}/${R//_/+}"
           done
 
-          REPORT_TARGET_PATH="${IMAGE_URI}/${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}/b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
-          echo "REPORT_TARGET_PATH=${REPORT_TARGET_PATH@Q}" >> .env
-
           # Set some variables we'll need to consume later on
-          echo "SCAN_CONTAINER_IMAGE=${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${LATEST_REVISION}" >> "${GITHUB_ENV}"
-          echo "REPORT_TARGET_PATH=${REPORT_TARGET_PATH}" >> "${GITHUB_ENV}"
+          SCAN_CONTAINER_IMAGE="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${LATEST_REVISION}"
+          REPORT_TARGET_PATH="${IMAGE_URI}/${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}/b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
 
-          echo "COMP_REPORT_XML_SOURCE=compliance.xml" >> "${GITHUB_ENV}"
-          echo "COMP_REPORT_XML_TARGET=${REPORT_TARGET_PATH}/${COMP_REPORT_XML_SOURCE}" >> "${GITHUB_ENV}"
-          echo "COMP_REPORT_HTML_SOURCE=compliance.html" >> "${GITHUB_ENV}"
-          echo "COMP_REPORT_HTML_TARGET=${REPORT_TARGET_PATH}/${COMP_REPORT_HTML_SOURCE}" >> "${GITHUB_ENV}"
+          COMP_REPORT_XML_SOURCE="compliance.xml"
+          COMP_REPORT_XML_TARGET="${REPORT_TARGET_PATH}/${COMP_REPORT_XML_SOURCE}"
+          COMP_REPORT_HTML_SOURCE="compliance.html"
+          COMP_REPORT_HTML_TARGET="${REPORT_TARGET_PATH}/${COMP_REPORT_HTML_SOURCE}"
 
-          echo "VULN_REPORT_SOURCE=vulnerabilities.sarif" >> "${GITHUB_ENV}"
-          echo "VULN_REPORT_TARGET=${REPORT_TARGET_PATH}/${VULN_REPORT_SOURCE}" >> "${GITHUB_ENV}"
+          VULN_REPORT_SOURCE="vulnerabilities.sarif"
+          VULN_REPORT_TARGET="${REPORT_TARGET_PATH}/${VULN_REPORT_SOURCE}"
+
+          VARS=(
+              SCAN_CONTAINER_IMAGE
+              REPORT_TARGET_PATH
+
+              COMP_REPORT_XML_SOURCE
+              COMP_REPORT_XML_TARGET
+              COMP_REPORT_HTML_SOURCE
+              COMP_REPORT_HTML_TARGET
+
+              VULN_REPORT_SOURCE
+              VULN_REPORT_TARGET
+          )
+
+          for VAR in "${VARS[@]}" ; do
+              VAL="${!VAR}"
+              echo "${VAR}=${VAL@Q}" >> .env
+              "${VAR}=${VAL}"
+          done >> "${GITHUB_ENV}"
 
       - name: Analyze STIG Compliance
         if: ${{ env.SCAN_COMP == 'true' }}
