@@ -21,7 +21,7 @@ on:
         required: false
         type: boolean
         # Start of false, for testing...
-        default: false
+        default: true
       compliance-required:
         description: "Whether or not to require full STIG compliance to approve the build (default false)"
         required: false
@@ -788,7 +788,7 @@ jobs:
           aws s3 cp "${COMP_REPORT_HTML_SOURCE}" "s3://${REPORTS_BUCKET}/${COMP_REPORT_HTML_TARGET}"
 
       - name: Scan for Vulnerabilities
-        if: ${{ (env.SCAN_VULN == 'true') && (env.VULN_VULN_SCAN_ATTEMPTED == 'true') && (env.VULN_SCAN_COMPLETED == 'true') }}
+        if: ${{ env.SCAN_VULN == 'true' }}
         continue-on-error: ${{ env.VULN_SCAN_REQUIRED != 'true' }}
         uses: aquasecurity/trivy-action@0.20.0
         with:
