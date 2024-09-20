@@ -690,7 +690,7 @@ jobs:
 
           # Just in case the image provides its own STIG files, in case the public ones aren't supported
           LOCAL_SSG="ssg.xml"
-          docker cp -La "${CONTAINER_ID}:/ssg.xml" . > "${LOCAL_SSG}" || LOCAL_SSG=""
+          docker cp -L "${CONTAINER_ID}:/${LOCAL_SSG}" . || LOCAL_SSG=""
 
           docker rm "${CONTAINER_ID}" &>/dev/null || true
           unset CONTAINER_ID
@@ -718,7 +718,9 @@ jobs:
           # determine which ssg to use based on /etc/os-release
           # see https://www.freedesktop.org/software/systemd/man/os-release.html
           SSG_FILE=""
+          SSG_MATCH=""
           for OS_ID in "${OS_ID_LIST[@]}" ; do
+              SSG_MATCH="${OS_ID}"
               if [ "${OS_ID}" == "ubuntu" ] && echo "${OS_VERSION}" | grep -qE '^18\.04(\..*)?$' ; then
                   SSG_FILE="ssg-ubuntu1804-ds.xml"
               elif [ "${OS_ID}" == "ubuntu" ] && echo "${OS_VERSION}" | grep -qE '^20\.04(\..*)?$' ; then
@@ -756,14 +758,14 @@ jobs:
 
           # After all that shuffling, if we have no SSG file, we simply foxtrot oscar
           if [ -z "${SSG_FILE}" ] ; then
-              echo "There is no STIG configuration file available for ${OS_ID} ${OS_VERSION}"
+              echo "There is no STIG configuration file available for ${OS_ID} ${OS_VERSION} (attempted IDs: ${OS_ID_LIST[@]@Q})"
               echo "COMP_SCAN_ATTEMPTED=false" >> "${GITHUB_ENV}"
               echo "COMP_SCAN_COMPLETED=false" >> "${GITHUB_ENV}"
               echo "COMP_SCAN_OK=false" >> "${GITHUB_ENV}"
               exit 0
           fi
 
-          echo "Will use the SSG file [${SSG_FILE}] for the OS ${OS_PRETTY_NAME}"
+          echo "Will use the SSG file [${SSG_FILE}] for the OS ${OS_PRETTY_NAME} (matched by ${SSG_MATCH})"
 
           # This will be the path to our SSG file
           SSG_FILE="scap-security-guide-${SCAP_SECURITY_GUIDE_VERSION}/${SSG_FILE}"
