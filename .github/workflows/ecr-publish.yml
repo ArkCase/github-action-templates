@@ -683,8 +683,8 @@ jobs:
           # determine which ssg to use based on /etc/os-release
           # see https://www.freedesktop.org/software/systemd/man/os-release.html
           OS_VERSION=$(awk -F= '$1=="VERSION_ID" { print $2 ;}' os-release | sed 's/"//g')
-          OD_ID=$(awk -F= '$1=="ID" { print $2 ;}' os-release | sed 's/"//g')
-          if [ "${OD_ID}" == "ubuntu" ] && echo "${OS_VERSION}" | grep -qE '^18\.04(\..*)?$' ; then
+          OS_ID=$(awk -F= '$1=="ID" { print $2 ;}' os-release | sed 's/"//g')
+          if [ "${OS_ID}" == "ubuntu" ] && echo "${OS_VERSION}" | grep -qE '^18\.04(\..*)?$' ; then
               SSG_FILE="ssg-ubuntu1804-ds.xml"
           elif [ "${OS_ID}" == "ubuntu" ] && echo "${OS_VERSION}" | grep -qE '^20\.04(\..*)?$' ; then
               SSG_FILE="ssg-ubuntu2004-ds.xml"
