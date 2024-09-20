@@ -689,7 +689,7 @@ jobs:
           docker cp -L "${CONTAINER_ID}:/etc/os-release" . || COPY_RESULT="${?}"
 
           # Just in case the image provides its own STIG files, in case the public ones aren't supported
-          LOCAL_SSG="ssg.xml"
+          LOCAL_SSG="ssg-ds.xml"
           docker cp -L "${CONTAINER_ID}:/${LOCAL_SSG}" . || LOCAL_SSG=""
 
           docker rm "${CONTAINER_ID}" &>/dev/null || true
