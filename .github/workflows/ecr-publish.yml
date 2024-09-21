@@ -806,7 +806,7 @@ jobs:
           RESULTS_MOUNT="$(readlink -f ".")"
           CMD=(
               docker run
-                  -it --rm
+                  --rm
                   --name oscap_scanner
                   --volume "/var/run/docker.sock:/var/run/docker.sock"
                   --volume "${SSG_MOUNT}:/ssg"
