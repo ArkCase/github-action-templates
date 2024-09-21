@@ -608,28 +608,26 @@ jobs:
           done
 
           # Set some variables we'll need to consume later on
-          SCAN_CONTAINER_IMAGE="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${LATEST_REVISION}"
+          IMAGE_TO_SCAN="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${LATEST_REVISION}"
           REPORT_TARGET_PATH="${IMAGE_URI}/${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}/b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
 
           COMP_REPORT_XML_SOURCE="compliance.xml"
-          COMP_REPORT_XML_TARGET="${REPORT_TARGET_PATH}/${COMP_REPORT_XML_SOURCE}"
+          COMP_REPORT_HDF_SOURCE="compliance.hdf"
           COMP_REPORT_HTML_SOURCE="compliance.html"
-          COMP_REPORT_HTML_TARGET="${REPORT_TARGET_PATH}/${COMP_REPORT_HTML_SOURCE}"
+          COMP_REPORT_SARIF_SOURCE="compliance.sarif"
 
           VULN_REPORT_SOURCE="vulnerabilities.sarif"
-          VULN_REPORT_TARGET="${REPORT_TARGET_PATH}/${VULN_REPORT_SOURCE}"
 
           VARS=(
-              SCAN_CONTAINER_IMAGE
+              IMAGE_TO_SCAN
               REPORT_TARGET_PATH
 
               COMP_REPORT_XML_SOURCE
-              COMP_REPORT_XML_TARGET
+              COMP_REPORT_HDF_SOURCE
               COMP_REPORT_HTML_SOURCE
-              COMP_REPORT_HTML_TARGET
+              COMP_REPORT_SARIF_SOURCE
 
               VULN_REPORT_SOURCE
-              VULN_REPORT_TARGET
           )
 
           for VAR in "${VARS[@]}" ; do
@@ -642,6 +640,9 @@ jobs:
         if: ${{ env.SCAN_COMP == 'true' }}
         continue-on-error: ${{ env.COMP_SCAN_REQUIRED != 'true' }}
         env:
+          ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
+          OSCAP_SCANNER_IMAGE: "arkcase/openscap:1.4.0"
           SCAP_SECURITY_GUIDE_VERSION: "0.1.74"
           MICROSOFT_SARIF_MULTITOOL_VERSION: "4.5.4"
           MITRE_SAF_VERSION: "1.4.12"
@@ -656,24 +657,23 @@ jobs:
           (
               set -euo pipefail
 
-              sudo apt-get install -y libopenscap8
+              echo "Installing the openscap library"
+              apt-get -y install libopenscap8
 
-              #
-              # Install the pre-requisites
-              #
-
+              echo "Installing the Microsoft SARIF Multitool v${MICROSOFT_SARIF_MULTITOOL_VERSION}"
               npm install -g "@microsoft/sarif-multitool@${MICROSOFT_SARIF_MULTITOOL_VERSION}"
+              echo "Installing Mitre SAF v${MITRE_SAF_VERSION}"
               npm install -g "@mitre/saf@${MITRE_SAF_VERSION}"
-
+              echo "Downloading the SCAP Security Guide v${SCAP_SECURITY_GUIDE_VERSION}..."
               ZIP="ssg.zip"
               curl -fsSL "https://github.com/ComplianceAsCode/content/releases/download/v${SCAP_SECURITY_GUIDE_VERSION}/scap-security-guide-${SCAP_SECURITY_GUIDE_VERSION}.zip" -o "${ZIP}"
+              echo "Download complete! Extracting..."
               unzip -q "${ZIP}" -d "${SSG_DIR}"
-
-              echo "Pre-requisites installed!"
+              echo "Extraction complete!"
           ) || RC=${?}
 
           if [ ${RC} -ne 0 ] ; then
-              echo "Failed to install the pre-requisites to execute the STIG compliance scanning"
+              echo "Failed to download and install the prerequisites"
               echo "COMP_SCAN_ATTEMPTED=false" >> "${GITHUB_ENV}"
               echo "COMP_SCAN_COMPLETED=false" >> "${GITHUB_ENV}"
               echo "COMP_SCAN_OK=false" >> "${GITHUB_ENV}"
@@ -681,7 +681,7 @@ jobs:
           fi
 
           # extract /etc/os-release from the container image
-          CONTAINER_ID=$(docker create --pull never "${SCAN_CONTAINER_IMAGE}")
+          CONTAINER_ID=$(docker create --pull never "${IMAGE_TO_SCAN}")
 
           COPY_RESULT=0
 
@@ -690,13 +690,13 @@ jobs:
 
           # Just in case the image provides its own STIG files, in case the public ones aren't supported
           LOCAL_SSG="ssg-ds.xml"
-          docker cp -L "${CONTAINER_ID}:/${LOCAL_SSG}" . || LOCAL_SSG=""
+          docker cp -L "${CONTAINER_ID}:/${LOCAL_SSG}" "${SSG_DIR}" && || LOCAL_SSG=""
 
           docker rm "${CONTAINER_ID}" &>/dev/null || true
           unset CONTAINER_ID
 
           if [ ${COPY_RESULT} -ne 0 ] ; then
-              echo "The operating system used by ${SCAN_CONTAINER_IMAGE} could not be detected."
+              echo "The operating system used by ${IMAGE_TO_SCAN} could not be detected."
               echo "Images that are not based on an operating system (such as distroless images) cannot be scanned by SCAP."
               echo "COMP_SCAN_ATTEMPTED=false" >> "${GITHUB_ENV}"
               echo "COMP_SCAN_COMPLETED=false" >> "${GITHUB_ENV}"
@@ -751,8 +751,8 @@ jobs:
 
               # If we have a match, we use it!
               if [ -n "${SSG_FILE}" ] ; then
-                  # Make sure the file exists
-                  SSG_FILE="$(find "${SSG_DIR}" -type f -name "${SSG_FILE}")"
+                  # Make sure the file exists (the mindepth is important!)
+                  SSG_FILE="$(cd "${SSG_DIR}" && find * -mindepth 1 -type f -name "${SSG_FILE}")"
 
                   # If the file exists, then that's all there is to it!
                   [ -n "${SSG_FILE}" ] && break
@@ -801,15 +801,25 @@ jobs:
 
           echo "Launching the OSCAP Scan"
 
+          # TODO: Run this from a Docker container
+          SSG_MOUNT="$(readlink -f "${SSG_DIR}")"
+          RESULT_MOUNT="$(readlink -f ".")"
           CMD=(
-              oscap-docker
-                  image "${SCAN_CONTAINER_IMAGE}"
-                  xccdf eval
-                  --verbose ERROR
-                  --profile "${PROFILE}"
-                  --results "${COMP_REPORT_XML_SOURCE}"
-                  --report "${COMP_REPORT_HTML_SOURCE}"
-                  "${SSG_FILE}"
+              docker run
+                  -it --rm
+                  --name oscap_scanner
+                  --volume "/var/run/docker.sock:/var/run/docker.sock"
+                  --volume "${SSG_MOUNT}:/ssg"
+                  --volume "${RESULTS_MOUNT}:/results"
+                  "${ECR_REGISTRY_PRIVATE}/${OSCAP_SCANNER_IMAGE}"
+                  oscap-docker
+                      image "${IMAGE_TO_SCAN}"
+                      xccdf eval
+                      --verbose ERROR
+                      --profile "${PROFILE}"
+                      --results "/results/${COMP_REPORT_XML_SOURCE}"
+                      --report "/results/${COMP_REPORT_HTML_SOURCE}"
+                      "/ssg/${SSG_FILE}"
           )
 
           # If we've chosen to have a timeout, then let's add it up front
@@ -834,9 +844,25 @@ jobs:
               * ) echo "openscap returned an unexpected exit status of ${OSCAP_EXIT_CODE}" ;;
           esac
 
+          if [ "${COMP_SCAN_COMPLETED}" == "true" ] ; then
+              echo "Converting XML results to HDF"
+              saf convert xccdf_results2hdf -i "${COMP_REPORT_XML_SOURCE}" -o "${COMP_REPORT_HDF_SOURCE}"
+              echo "Converting HDF results to SARIF"
+              DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 sarif-multitool convert -t Hdf -o "${COMP_REPORT_SARIF_SOURCE}" "${COMP_REPORT_HDF_SOURCE}.json"
+              echo "Conversions complete!"
+          fi
+
           echo "COMP_SCAN_ATTEMPTED=${COMP_SCAN_ATTEMPTED}" >> "${GITHUB_ENV}"
           echo "COMP_SCAN_COMPLETED=${COMP_SCAN_COMPLETED}" >> "${GITHUB_ENV}"
           echo "COMP_SCAN_OK=${COMP_SCAN_OK}" >> "${GITHUB_ENV}"
+
+      - name: Upload the STIG compliance report to the GitHub Security tab
+        if: ${{ (env.SCAN_COMP == 'true') && (env.COMP_SCAN_ATTEMPTED == 'true') && (env.COMP_SCAN_COMPLETED == 'true') }}
+        continue-on-error: ${{ env.VULN_COMP_REQUIRED != 'true' }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ env.COMP_REPORT_SARIF_SOURCE }}
+          category: STIG-compliance
 
       - name: Upload the STIG Compliance report to S3
         if: ${{ (env.SCAN_COMP == 'true') && (env.COMP_SCAN_ATTEMPTED == 'true') && (env.COMP_SCAN_COMPLETED == 'true') }}
@@ -847,15 +873,20 @@ jobs:
           source .env
           cat .env
           set -x
-          aws s3 cp "${COMP_REPORT_XML_SOURCE}" "s3://${REPORTS_BUCKET}/${COMP_REPORT_XML_TARGET}"
-          aws s3 cp "${COMP_REPORT_HTML_SOURCE}" "s3://${REPORTS_BUCKET}/${COMP_REPORT_HTML_TARGET}"
+          for SRC in XML HDF HTML SARIF ; do
+              SRC="COMP_REPORT_${SRC}_SOURCE"
+              VAL="${!SRC}"
+              echo "Uploading [${VAL}] to [s3://${REPORTS_BUCKET}/${REPORTS_PATH}]..."
+              aws s3 cp "${VAL}" "s3://${REPORTS_BUCKET}/${REPORTS_PATH}/${VAL}"
+          done
+          echo "Uploads complete!"
 
       - name: Scan for Vulnerabilities
         if: ${{ env.SCAN_VULN == 'true' }}
         continue-on-error: ${{ env.VULN_SCAN_REQUIRED != 'true' }}
         uses: aquasecurity/trivy-action@0.24.0
         with:
-          image-ref: ${{ env.SCAN_CONTAINER_IMAGE }}
+          image-ref: ${{ env.IMAGE_TO_SCAN }}
           exit-code: '1'
           ignore-unfixed: true
           vuln-type: "os,library"
@@ -874,6 +905,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: ${{ env.VULN_REPORT_SOURCE }}
+          category: vulnerabilities
 
       - name: Upload the vulnerabilities report to S3
         if: ${{ env.SCAN_VULN == 'true' }}
@@ -884,7 +916,9 @@ jobs:
           source .env
           cat .env
           set -x
-          aws s3 cp "${VULN_REPORT_SOURCE}" "s3://${REPORTS_BUCKET}/${VULN_REPORT_TARGET}"
+          echo "Uploading [${VULN_REPORT_SOURCE}] to [s3://${REPORTS_BUCKET}/${REPORTS_PATH}]..."
+          aws s3 cp "${VULN_REPORT_SOURCE}" "s3://${REPORTS_BUCKET}/${REPORTS_PATH}/${VULN_REPORT_SOURCE}"
+          echo "Upload complete!"
 
       - name: Push the new tags
         run: |
