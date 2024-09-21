@@ -829,6 +829,7 @@ jobs:
           # Run the command!
           OSCAP_EXIT_CODE=0
           COMP_SCAN_ATTEMPTED="true"
+          echo "Launching: ${CMD[@]@Q}"
           "${CMD[@]}" || OSCAP_EXIT_CODE=${?}
           COMP_SCAN_COMPLETED="false"
           COMP_SCAN_OK="false"
