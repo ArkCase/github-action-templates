@@ -690,7 +690,7 @@ jobs:
 
           # Just in case the image provides its own STIG files, in case the public ones aren't supported
           LOCAL_SSG="ssg-ds.xml"
-          docker cp -L "${CONTAINER_ID}:/${LOCAL_SSG}" "${SSG_DIR}" && || LOCAL_SSG=""
+          docker cp -L "${CONTAINER_ID}:/${LOCAL_SSG}" "${SSG_DIR}" || LOCAL_SSG=""
 
           docker rm "${CONTAINER_ID}" &>/dev/null || true
           unset CONTAINER_ID
