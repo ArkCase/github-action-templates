@@ -785,7 +785,7 @@ jobs:
 
           PROFILE=""
           for P in "${PROFILES[@]}" ; do
-              oscap info --profiles "${SSG_FILE}" | grep -qF "${P}:" || continue
+              oscap info --profiles "${SSG_DIR}/${SSG_FILE}" | grep -qF "${P}:" || continue
               PROFILE="${P}"
               echo "Selected STIG profile: [${PROFILE}]"
               break
