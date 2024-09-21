@@ -658,7 +658,7 @@ jobs:
               set -euo pipefail
 
               echo "Installing the openscap library"
-              apt-get -y install libopenscap8
+              sudo apt-get -y install libopenscap8
 
               echo "Installing the Microsoft SARIF Multitool v${MICROSOFT_SARIF_MULTITOOL_VERSION}"
               npm install -g "@microsoft/sarif-multitool@${MICROSOFT_SARIF_MULTITOOL_VERSION}"
