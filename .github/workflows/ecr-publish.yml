@@ -803,7 +803,7 @@ jobs:
 
           # TODO: Run this from a Docker container
           SSG_MOUNT="$(readlink -f "${SSG_DIR}")"
-          RESULT_MOUNT="$(readlink -f ".")"
+          RESULTS_MOUNT="$(readlink -f ".")"
           CMD=(
               docker run
                   -it --rm
