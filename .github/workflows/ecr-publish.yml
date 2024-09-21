@@ -858,7 +858,7 @@ jobs:
           echo "COMP_SCAN_OK=${COMP_SCAN_OK}" >> "${GITHUB_ENV}"
 
       - name: Upload the STIG compliance report to the GitHub Security tab
-        if: ${{ (env.SCAN_COMP == 'true') && (env.COMP_SCAN_ATTEMPTED == 'true') && (env.COMP_SCAN_COMPLETED == 'true') }}
+        if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
         continue-on-error: ${{ env.VULN_COMP_REQUIRED != 'true' }}
         uses: github/codeql-action/upload-sarif@v3
         with:
@@ -866,7 +866,7 @@ jobs:
           category: STIG-compliance
 
       - name: Upload the STIG Compliance report to S3
-        if: ${{ (env.SCAN_COMP == 'true') && (env.COMP_SCAN_ATTEMPTED == 'true') && (env.COMP_SCAN_COMPLETED == 'true') }}
+        if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
         continue-on-error: ${{ env.COMP_SCAN_REQUIRED != 'true' }}
         env:
           REPORTS_BUCKET: ${{ inputs.reports-bucket }}
@@ -874,13 +874,16 @@ jobs:
           source .env
           cat .env
           set -x
+          COUNT=0
           for SRC in XML HDF HTML SARIF ; do
               SRC="COMP_REPORT_${SRC}_SOURCE"
               VAL="${!SRC}"
+              [ -f "${VAL}" ] || continue
               echo "Uploading [${VAL}] to [s3://${REPORTS_BUCKET}/${REPORTS_PATH}]..."
               aws s3 cp "${VAL}" "s3://${REPORTS_BUCKET}/${REPORTS_PATH}/${VAL}"
+              (( ++COUNT ))
           done
-          echo "Uploads complete!"
+          echo "Uploaded ${COUNT} report(s)!"
 
       - name: Scan for Vulnerabilities
         if: ${{ env.SCAN_VULN == 'true' }}
@@ -901,7 +904,7 @@ jobs:
           AWS_DEFAULT_REGION: ${{ secrets.ECR_AWS_REGION }}
 
       - name: Upload the vulnerabilities report to the GitHub Security tab
-        if: ${{ env.SCAN_VULN == 'true' }}
+        if: ${{ hashFiles(env.VULN_REPORT_SOURCE) != '' }}
         continue-on-error: ${{ env.VULN_SCAN_REQUIRED != 'true' }}
         uses: github/codeql-action/upload-sarif@v3
         with:
@@ -909,7 +912,7 @@ jobs:
           category: vulnerabilities
 
       - name: Upload the vulnerabilities report to S3
-        if: ${{ env.SCAN_VULN == 'true' }}
+        if: ${{ hashFiles(env.VULN_REPORT_SOURCE) != '' }}
         continue-on-error: ${{ env.VULN_SCAN_REQUIRED != 'true' }}
         env:
           REPORTS_BUCKET: ${{ inputs.reports-bucket }}
