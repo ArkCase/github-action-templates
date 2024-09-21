@@ -682,6 +682,7 @@ jobs:
 
           # extract /etc/os-release from the container image
           CONTAINER_ID=$(docker create --pull never "${IMAGE_TO_SCAN}")
+          echo "CONTAINER_ID=${CONTAINER_ID}" >> "${GITHUB_ENV}"
 
           COPY_RESULT=0
 
@@ -691,9 +692,6 @@ jobs:
           # Just in case the image provides its own STIG files, in case the public ones aren't supported
           LOCAL_SSG="ssg-ds.xml"
           docker cp -L "${CONTAINER_ID}:/${LOCAL_SSG}" "${SSG_DIR}" || LOCAL_SSG=""
-
-          docker rm "${CONTAINER_ID}" &>/dev/null || true
-          unset CONTAINER_ID
 
           if [ ${COPY_RESULT} -ne 0 ] ; then
               echo "The operating system used by ${IMAGE_TO_SCAN} could not be detected."
@@ -799,21 +797,22 @@ jobs:
               exit 0
           fi
 
-          echo "Launching the OSCAP Scan"
+          echo "Launching the OSCAP Scan for ${IMAGE_TO_SCAN} (container = ${CONTAINER_ID})"
 
-          # TODO: Run this from a Docker container
           SSG_MOUNT="$(readlink -f "${SSG_DIR}")"
           RESULTS_MOUNT="$(readlink -f ".")"
+          OSCAP_SCANNER_IMAGE="${ECR_REGISTRY_PRIVATE}/${OSCAP_SCANNER_IMAGE}"
+          DOCKER_SOCKET="/var/run/docker.sock"
           CMD=(
               docker run
                   --rm
                   --name oscap_scanner
-                  --volume "/var/run/docker.sock:/var/run/docker.sock"
+                  --volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}"
                   --volume "${SSG_MOUNT}:/ssg"
                   --volume "${RESULTS_MOUNT}:/results"
-                  "${ECR_REGISTRY_PRIVATE}/${OSCAP_SCANNER_IMAGE}"
+                  "${OSCAP_SCANNER_IMAGE}"
                   oscap-docker
-                      image "${IMAGE_TO_SCAN}"
+                      container "${CONTAINER_ID}"
                       xccdf eval
                       --verbose ERROR
                       --profile "${PROFILE}"
@@ -833,6 +832,7 @@ jobs:
           "${CMD[@]}" || OSCAP_EXIT_CODE=${?}
           COMP_SCAN_COMPLETED="false"
           COMP_SCAN_OK="false"
+
           case "${OSCAP_EXIT_CODE}" in
               0 ) echo "All rules passed" ; COMP_SCAN_COMPLETED="true" ; COMP_SCAN_OK="true" ;;
 
@@ -856,6 +856,11 @@ jobs:
           echo "COMP_SCAN_ATTEMPTED=${COMP_SCAN_ATTEMPTED}" >> "${GITHUB_ENV}"
           echo "COMP_SCAN_COMPLETED=${COMP_SCAN_COMPLETED}" >> "${GITHUB_ENV}"
           echo "COMP_SCAN_OK=${COMP_SCAN_OK}" >> "${GITHUB_ENV}"
+
+      - name: Remove the scanned container
+        if: ${{ env.CONTAINER_ID != '' }}
+        run: |
+          docker rm "${CONTAINER_ID}" || true
 
       - name: Upload the STIG compliance report to the GitHub Security tab
         if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
