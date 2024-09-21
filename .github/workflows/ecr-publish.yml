@@ -645,7 +645,6 @@ jobs:
           SCAP_SECURITY_GUIDE_VERSION: "0.1.74"
           MICROSOFT_SARIF_MULTITOOL_VERSION: "4.5.4"
           MITRE_SAF_VERSION: "1.4.12"
-          SSG_DIR: "ssg"
         run: |
           source .env
           cat .env
@@ -653,6 +652,7 @@ jobs:
           set -euo pipefail
 
           RC=0
+          SSG_DIR="ssg"
           (
               set -euo pipefail
 
@@ -665,9 +665,9 @@ jobs:
               npm install -g "@microsoft/sarif-multitool@${MICROSOFT_SARIF_MULTITOOL_VERSION}"
               npm install -g "@mitre/saf@${MITRE_SAF_VERSION}"
 
-              mkdir -p "${SSG_DIR}"
-              curl -fsSL "https://github.com/ComplianceAsCode/content/releases/download/v${SCAP_SECURITY_GUIDE_VERSION}/scap-security-guide-${SCAP_SECURITY_GUIDE_VERSION}.zip" -o "${SSG_DIR}/ssg.zip"
-              unzip "${SSG_DIR}/ssg.zip" -d "${SSG_DIR}"
+              ZIP="ssg.zip"
+              curl -fsSL "https://github.com/ComplianceAsCode/content/releases/download/v${SCAP_SECURITY_GUIDE_VERSION}/scap-security-guide-${SCAP_SECURITY_GUIDE_VERSION}.zip" -o "${ZIP}"
+              unzip -q "${ZIP}" -d "${SSG_DIR}"
 
               echo "Pre-requisites installed!"
           ) || RC=${?}
@@ -750,7 +750,16 @@ jobs:
               fi
 
               # If we have a match, we use it!
-              [ -n "${SSG_FILE}" ] && break
+              if [ -n "${SSG_FILE}" ] ; then
+                  # Make sure the file exists
+                  SSG_FILE="$(find "${SSG_DIR}" -type f -name "${SSG_FILE}")"
+
+                  # If the file exists, then that's all there is to it!
+                  [ -n "${SSG_FILE}" ] && break
+
+                  # If we didn't have a match, we clean out the value
+                  SSG_FILE=""
+              fi
 
               # If we don't have a first-pass match, but we have a local file, use that!
               [ -n "${LOCAL_SSG}" ] && SSG_FILE="${LOCAL_SSG}" && break
@@ -767,9 +776,6 @@ jobs:
 
           echo "Will use the SSG file [${SSG_FILE}] for the OS ${OS_PRETTY_NAME} (matched by ${SSG_MATCH})"
 
-          # This will be the path to our SSG file
-          SSG_FILE="scap-security-guide-${SCAP_SECURITY_GUIDE_VERSION}/${SSG_FILE}"
-
           # Select the profile to use. The first profile that exists in the ssg is used.
           PROFILES=(
               xccdf_org.ssgproject.content_profile_cis_level2_server
@@ -779,7 +785,7 @@ jobs:
 
           PROFILE=""
           for P in "${PROFILES[@]}" ; do
-              oscap info --profiles "${SSG_DIR}/${SSG_FILE}" | grep -qF "${P}:" || continue
+              oscap info --profiles "${SSG_FILE}" | grep -qF "${P}:" || continue
               PROFILE="${P}"
               echo "Selected STIG profile: [${PROFILE}]"
               break
