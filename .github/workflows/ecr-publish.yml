@@ -74,6 +74,8 @@ env:
   ECR_AWS_ORG_ID: ${{ secrets.ECR_AWS_ORG_ID }}
   GH_TOKEN: ${{ github.token }}
 
+  OSCAP_SCANNER_IMAGE: "arkcase/openscap:20240922.02"
+
   # Enable/disable STIG Compliance Scans
   SCAN_COMP: ${{ inputs.compliance-scan }}
   SCAN_COMP_REQUIRED: ${{ inputs.compliance-required }}
@@ -650,7 +652,6 @@ jobs:
         env:
           ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
           ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
-          OSCAP_SCANNER_IMAGE: "arkcase/openscap:20240922.02"
         run: |
           source .env
           cat .env
@@ -660,7 +661,6 @@ jobs:
           echo "Launching the OSCAP Scan for ${IMAGE_TO_SCAN}..."
 
           RESULTS_MOUNT="$(readlink -f ".")"
-          OSCAP_SCANNER_IMAGE="${ECR_REGISTRY_PRIVATE}/${OSCAP_SCANNER_IMAGE}"
           DOCKER_SOCKET="/var/run/docker.sock"
           CMD=(
               docker run 
@@ -668,7 +668,8 @@ jobs:
                   --name oscap-scanner
                   --volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}"
                   --volume "${RESULTS_MOUNT}:/results"
-                  "${OSCAP_SCANNER_IMAGE}" scan --image "${IMAGE_TO_SCAN}"
+                  "${ECR_REGISTRY_PRIVATE}/${OSCAP_SCANNER_IMAGE}" \
+                      scan --image "${IMAGE_TO_SCAN}"
           )
           # Run the command!
           OSCAP_EXIT_CODE=0
@@ -732,12 +733,15 @@ jobs:
       - name: Convert the SARIF vulnerabilities report to HTML
         if: ${{ hashFiles(env.VULN_REPORT_SARIF_SOURCE) != '' }}
         continue-on-error: ${{ env.VULN_SCAN_REQUIRED != 'true' }}
+        env:
+          ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
         run: |
           docker run \
               --rm \
               --name sarif-convert \
               --volume "$(readlink -f .):/host" \
-              "${OSCAP_SCANNER_IMAGE}" sarif html --output "/host/${VULN_REPORT_HTML_SOURCE}" "/host/${VULN_REPORT_SARIF_SOURCE}"
+              "${ECR_REGISTRY_PRIVATE}/${OSCAP_SCANNER_IMAGE}" \
+                  sarif html --output "/host/${VULN_REPORT_HTML_SOURCE}" "/host/${VULN_REPORT_SARIF_SOURCE}"
 
       - name: Upload the vulnerabilities report to the GitHub artifacts tab
         if: ${{ hashFiles(env.VULN_REPORT_SARIF_SOURCE) != '' }}
