@@ -736,12 +736,16 @@ jobs:
         env:
           ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          docker run \
-              --rm \
-              --name sarif-convert \
-              --volume "$(readlink -f .):/host" \
-              "${ECR_REGISTRY_PRIVATE}/${OSCAP_SCANNER_IMAGE}" \
-                  sarif html --output "/host/${VULN_REPORT_HTML_SOURCE}" "/host/${VULN_REPORT_SARIF_SOURCE}"
+          CMD=(
+              docker run
+                  --rm
+                  --name sarif-convert
+                  --volume "$(readlink -f .):/host"
+                  "${ECR_REGISTRY_PRIVATE}/${OSCAP_SCANNER_IMAGE}"
+                      sarif html --output "/host/${VULN_REPORT_HTML_SOURCE}" "/host/${VULN_REPORT_SARIF_SOURCE}"
+          )
+          echo "Running: ${CMD[@]@Q}"
+          "${CMD[@]}"
 
       - name: Upload the vulnerabilities report to the GitHub artifacts tab
         if: ${{ hashFiles(env.VULN_REPORT_SARIF_SOURCE) != '' }}
