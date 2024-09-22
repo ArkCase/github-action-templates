@@ -646,7 +646,7 @@ jobs:
         env:
           ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
           ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
-          OSCAP_SCANNER_IMAGE: "arkcase/openscap:"
+          OSCAP_SCANNER_IMAGE: "arkcase/openscap:20240922.01"
         run: |
           source .env
           cat .env
