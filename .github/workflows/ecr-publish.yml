@@ -708,7 +708,7 @@ jobs:
               echo "Uploading [${SRC}] to [s3://${REPORTS_BUCKET}/${REPORTS_PATH}]..."
               aws s3 cp "${SRC}" "s3://${REPORTS_BUCKET}/${REPORTS_PATH}/${SRC}"
               (( ++COUNT ))
-          done < <(find . -mindepth 0 -maxdepth 0 -type f -name "${COMP_REPORT_PATTERN}" | sort)
+          done < <(find . -min depth 1 -max depth 1 -type f -name "${COMP_REPORT_PATTERN}" | sort)
           [ ${COUNT} -eq 0 ] || echo "Uploaded ${COUNT} report(s)!"
 
       - name: Scan for Vulnerabilities
@@ -733,10 +733,10 @@ jobs:
         if: ${{ hashFiles(env.VULN_REPORT_SARIF_SOURCE) != '' }}
         continue-on-error: ${{ env.VULN_SCAN_REQUIRED != 'true' }}
         run: |
-          docker run
-              --rm
-              --name sarif-convert
-              --volume "$(readlink -f .):/host"
+          docker run \
+              --rm \
+              --name sarif-convert \
+              --volume "$(readlink -f .):/host" \
               "${OSCAP_SCANNER_IMAGE}" sarif html --output "/host/${VULN_REPORT_HTML_SOURCE}" "/host/${VULN_REPORT_SARIF_SOURCE}"
 
       - name: Upload the vulnerabilities report to the GitHub artifacts tab
@@ -768,7 +768,7 @@ jobs:
               echo "Uploading [${SRC}] to [s3://${REPORTS_BUCKET}/${REPORTS_PATH}]..."
               aws s3 cp "${SRC}" "s3://${REPORTS_BUCKET}/${REPORTS_PATH}/${SRC}"
               (( ++COUNT ))
-          done < <(find . -mindepth 0 -maxdepth 0 -type f -name "${VULN_REPORT_PATTERN}" | sort)
+          done < <(find . -min depth 1 -max depth 1 -type f -name "${VULN_REPORT_PATTERN}" | sort)
           [ ${COUNT} -eq 0 ] || echo "Uploaded ${COUNT} report(s)!"
 
       - name: Push the new tags
