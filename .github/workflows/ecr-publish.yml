@@ -427,6 +427,7 @@ jobs:
           # Select the base registries
           BUILD_ARGS+=(--build-arg "PRIVATE_REGISTRY=${ECR_REGISTRY_PRIVATE}")
           BUILD_ARGS+=(--build-arg "PUBLIC_REGISTRY=${ECR_REGISTRY_PUBLIC}")
+          BUILD_ARGS+=(--build-arg "BASE_VER_PFX=${REVISION_PREFIX}")
 
           # Select which one is the BASE registry, based on whether this
           # container is to be pushed to public or not
@@ -587,9 +588,10 @@ jobs:
               fi
           fi
 
-          set -x
-          docker build "${BUILD_ARGS[@]}" "${TAGS[@]}" .
-          set +x
+          (
+              set -x
+              docker build "${BUILD_ARGS[@]}" "${TAGS[@]}" .
+          ) || exit ${?}
 
           # Once the build succeeds, we create the required tags as appropriate
           if [ -z "${REVISION_PRERELEASE}" ] ; then
@@ -611,6 +613,7 @@ jobs:
           IMAGE_TO_SCAN="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${LATEST_REVISION}"
           REPORT_TARGET_PATH="${IMAGE_URI}/${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}/b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
 
+          COMP_REPORT_PATTERN="compliance.*"
           COMP_REPORT_XML_SOURCE="compliance.xml"
           COMP_REPORT_HDF_SOURCE="compliance.hdf"
           COMP_REPORT_HTML_SOURCE="compliance.html"
@@ -622,6 +625,7 @@ jobs:
               IMAGE_TO_SCAN
               REPORT_TARGET_PATH
 
+              COMP_REPORT_PATTERN
               COMP_REPORT_XML_SOURCE
               COMP_REPORT_HDF_SOURCE
               COMP_REPORT_HTML_SOURCE
@@ -642,225 +646,43 @@ jobs:
         env:
           ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
           ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
-          OSCAP_SCANNER_IMAGE: "arkcase/openscap:1.4.0"
-          SCAP_SECURITY_GUIDE_VERSION: "0.1.74"
-          MICROSOFT_SARIF_MULTITOOL_VERSION: "4.5.4"
-          MITRE_SAF_VERSION: "1.4.12"
+          OSCAP_SCANNER_IMAGE: "arkcase/openscap:"
         run: |
           source .env
           cat .env
 
           set -euo pipefail
 
-          RC=0
-          SSG_DIR="ssg"
-          (
-              set -euo pipefail
+          echo "Launching the OSCAP Scan for ${IMAGE_TO_SCAN}..."
 
-              echo "Installing the openscap library"
-              sudo apt-get -y install libopenscap8
-
-              echo "Installing the Microsoft SARIF Multitool v${MICROSOFT_SARIF_MULTITOOL_VERSION}"
-              npm install -g "@microsoft/sarif-multitool@${MICROSOFT_SARIF_MULTITOOL_VERSION}"
-              echo "Installing Mitre SAF v${MITRE_SAF_VERSION}"
-              npm install -g "@mitre/saf@${MITRE_SAF_VERSION}"
-              echo "Downloading the SCAP Security Guide v${SCAP_SECURITY_GUIDE_VERSION}..."
-              ZIP="ssg.zip"
-              curl -fsSL "https://github.com/ComplianceAsCode/content/releases/download/v${SCAP_SECURITY_GUIDE_VERSION}/scap-security-guide-${SCAP_SECURITY_GUIDE_VERSION}.zip" -o "${ZIP}"
-              echo "Download complete! Extracting..."
-              unzip -q "${ZIP}" -d "${SSG_DIR}"
-              echo "Extraction complete!"
-          ) || RC=${?}
-
-          if [ ${RC} -ne 0 ] ; then
-              echo "Failed to download and install the prerequisites"
-              echo "COMP_SCAN_ATTEMPTED=false" >> "${GITHUB_ENV}"
-              echo "COMP_SCAN_COMPLETED=false" >> "${GITHUB_ENV}"
-              echo "COMP_SCAN_OK=false" >> "${GITHUB_ENV}"
-              exit 0
-          fi
-
-          # extract /etc/os-release from the container image
-          CONTAINER_ID=$(docker create --pull never "${IMAGE_TO_SCAN}")
-          echo "CONTAINER_ID=${CONTAINER_ID}" >> "${GITHUB_ENV}"
-
-          COPY_RESULT=0
-
-          # Get the O/S info
-          docker cp -L "${CONTAINER_ID}:/etc/os-release" . || COPY_RESULT="${?}"
-
-          # Just in case the image provides its own STIG files, in case the public ones aren't supported
-          LOCAL_SSG="ssg-ds.xml"
-          docker cp -L "${CONTAINER_ID}:/${LOCAL_SSG}" "${SSG_DIR}" || LOCAL_SSG=""
-
-          if [ ${COPY_RESULT} -ne 0 ] ; then
-              echo "The operating system used by ${IMAGE_TO_SCAN} could not be detected."
-              echo "Images that are not based on an operating system (such as distroless images) cannot be scanned by SCAP."
-              echo "COMP_SCAN_ATTEMPTED=false" >> "${GITHUB_ENV}"
-              echo "COMP_SCAN_COMPLETED=false" >> "${GITHUB_ENV}"
-              echo "COMP_SCAN_OK=false" >> "${GITHUB_ENV}"
-              exit 0
-          fi
-
-          source <(
-              set -euo pipefail
-              source os-release
-              echo "OS_VERSION=${VERSION_ID@Q}"
-              echo "OS_VERSION_ALIAS=${VERSION@Q}"
-              echo "OS_ID_LIST=( ${ID} ${ID_LIKE:-} )"
-              echo "OS_NAME=${NAME@Q}"
-              echo "OS_PRETTY_NAME=${PRETTY_NAME@Q}"
-              [ -v CPE_NAME ] && echo "OS_CPE=${CPE_NAME@Q}"
-          )
-
-          # determine which ssg to use based on /etc/os-release
-          # see https://www.freedesktop.org/software/systemd/man/os-release.html
-          SSG_FILE=""
-          SSG_MATCH=""
-          for OS_ID in "${OS_ID_LIST[@]}" ; do
-              SSG_MATCH="${OS_ID}"
-              if [ "${OS_ID}" == "ubuntu" ] && echo "${OS_VERSION}" | grep -qE '^18\.04(\..*)?$' ; then
-                  SSG_FILE="ssg-ubuntu1804-ds.xml"
-              elif [ "${OS_ID}" == "ubuntu" ] && echo "${OS_VERSION}" | grep -qE '^20\.04(\..*)?$' ; then
-                  SSG_FILE="ssg-ubuntu2004-ds.xml"
-              elif [ "${OS_ID}" == "ubuntu" ] && echo "${OS_VERSION}" | grep -qE '^22\.04(\..*)?$' ; then
-                  SSG_FILE="ssg-ubuntu2204-ds.xml"
-              elif [ "${OS_ID}" == "centos" ] && echo "${OS_VERSION}" | grep -qE '^7(\..*)?$' ; then
-                  SSG_FILE="ssg-centos7-ds.xml"
-              elif [ "${OS_ID}" == "centos" ] && echo "${OS_VERSION}" | grep -qE '^8(\..*)?$' ; then
-                  SSG_FILE="ssg-centos8-ds.xml"
-              elif [ "${OS_ID}" == "ol" ] && echo "${OS_VERSION}" | grep -qE '^7(\..*)?$' ; then
-                  SSG_FILE="ssg-ol7-ds.xml"
-              elif [ "${OS_ID}" == "ol" ] && echo "${OS_VERSION}" | grep -qE '^8(\..*)?$' ; then
-                  SSG_FILE="ssg-ol8-ds.xml"
-              elif [ "${OS_ID}" == "ol" ] && echo "${OS_VERSION}" | grep -qE '^9(\..*)?$' ; then
-                  SSG_FILE="ssg-ol9-ds.xml"
-              elif [ "${OS_ID}" == "rhel" ] && echo "${OS_VERSION}" | grep -qE '^7(\..*)?$' ; then
-                  SSG_FILE="ssg-rhel7-ds.xml"
-              elif [ "${OS_ID}" == "rhel" ] && echo "${OS_VERSION}" | grep -qE '^8(\..*)?$' ; then
-                  SSG_FILE="ssg-rhel8-ds.xml"
-              elif [ "${OS_ID}" == "rhel" ] && echo "${OS_VERSION}" | grep -qE '^9(\..*)?$' ; then
-                  SSG_FILE="ssg-rhel9-ds.xml"
-              elif [ "${OS_ID}" == "sles" ] && echo "${OS_VERSION}" | grep -qE '^12(\..*)?$' ; then
-                  SSG_FILE="ssg-sle12-ds.xml"
-              elif [ "${OS_ID}" == "sles" ] && echo "${OS_VERSION}" | grep -qE '^15(\..*)?$' ; then
-                  SSG_FILE="ssg-sle15-ds.xml"
-              fi
-
-              # If we have a match, we use it!
-              if [ -n "${SSG_FILE}" ] ; then
-                  # Make sure the file exists (the mindepth is important!)
-                  SSG_FILE="$(cd "${SSG_DIR}" && find * -mindepth 1 -type f -name "${SSG_FILE}")"
-
-                  # If the file exists, then that's all there is to it!
-                  [ -n "${SSG_FILE}" ] && break
-
-                  # If we didn't have a match, we clean out the value
-                  SSG_FILE=""
-              fi
-
-              # If we don't have a first-pass match, but we have a local file, use that!
-              [ -n "${LOCAL_SSG}" ] && SSG_FILE="${LOCAL_SSG}" && break
-          done
-
-          # After all that shuffling, if we have no SSG file, we simply foxtrot oscar
-          if [ -z "${SSG_FILE}" ] ; then
-              echo "There is no STIG configuration file available for ${OS_ID} ${OS_VERSION} (attempted IDs: ${OS_ID_LIST[@]@Q})"
-              echo "COMP_SCAN_ATTEMPTED=false" >> "${GITHUB_ENV}"
-              echo "COMP_SCAN_COMPLETED=false" >> "${GITHUB_ENV}"
-              echo "COMP_SCAN_OK=false" >> "${GITHUB_ENV}"
-              exit 0
-          fi
-
-          echo "Will use the SSG file [${SSG_FILE}] for the OS ${OS_PRETTY_NAME} (matched by ${SSG_MATCH})"
-
-          # Select the profile to use. The first profile that exists in the ssg is used.
-          PROFILES=(
-              xccdf_org.ssgproject.content_profile_cis_level2_server
-              xccdf_org.ssgproject.content_profile_cis
-              xccdf_org.ssgproject.content_profile_standard
-          )
-
-          PROFILE=""
-          for P in "${PROFILES[@]}" ; do
-              oscap info --profiles "${SSG_DIR}/${SSG_FILE}" | grep -qF "${P}:" || continue
-              PROFILE="${P}"
-              echo "Selected STIG profile: [${PROFILE}]"
-              break
-          done
-
-          if [ -z "${PROFILE}" ] ; then
-              echo "Failed to find any of the candidate profiles referenced in the STIG file [${SSG_FILE}]: ${PROFILES[@]}"
-              echo "COMP_SCAN_ATTEMPTED=false" >> "${GITHUB_ENV}"
-              echo "COMP_SCAN_COMPLETED=false" >> "${GITHUB_ENV}"
-              echo "COMP_SCAN_OK=false" >> "${GITHUB_ENV}"
-              exit 0
-          fi
-
-          echo "Launching the OSCAP Scan for ${IMAGE_TO_SCAN} (container = ${CONTAINER_ID})"
-
-          SSG_MOUNT="$(readlink -f "${SSG_DIR}")"
           RESULTS_MOUNT="$(readlink -f ".")"
           OSCAP_SCANNER_IMAGE="${ECR_REGISTRY_PRIVATE}/${OSCAP_SCANNER_IMAGE}"
           DOCKER_SOCKET="/var/run/docker.sock"
           CMD=(
-              docker run
+              docker run 
                   --rm
-                  --name oscap_scanner
+                  --name oscap-scanner
                   --volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}"
-                  --volume "${SSG_MOUNT}:/ssg"
                   --volume "${RESULTS_MOUNT}:/results"
                   "${OSCAP_SCANNER_IMAGE}"
-                  oscap-docker
-                      container "${CONTAINER_ID}"
-                      xccdf eval
-                      --verbose ERROR
-                      --profile "${PROFILE}"
-                      --results "/results/${COMP_REPORT_XML_SOURCE}"
-                      --report "/results/${COMP_REPORT_HTML_SOURCE}"
-                      "/ssg/${SSG_FILE}"
+                  --image "${IMAGE_TO_SCAN}"
           )
-
-          # If we've chosen to have a timeout, then let's add it up front
-          [ -n "${SCAN_COMP_TIMEOUT:-}" ] && \
-              CMD=( timeout --verbose --signal=KILL "${SCAN_COMP_TIMEOUT}" "${CMD[@]}" )
-
           # Run the command!
           OSCAP_EXIT_CODE=0
-          COMP_SCAN_ATTEMPTED="true"
           echo "Launching: ${CMD[@]@Q}"
           "${CMD[@]}" || OSCAP_EXIT_CODE=${?}
-          COMP_SCAN_COMPLETED="false"
-          COMP_SCAN_OK="false"
-
           case "${OSCAP_EXIT_CODE}" in
-              0 ) echo "All rules passed" ; COMP_SCAN_COMPLETED="true" ; COMP_SCAN_OK="true" ;;
-
-              1 ) echo "An error occurred during evaluation" ;;
-
-              2 ) echo "There is at least one rule with either fail or unknown result" ; COMP_SCAN_COMPLETED="true" ; COMP_SCAN_OK="false" ;;
-
-              124 ) echo "The compliance scan timed out - can't make a determination" ;;
-
-              * ) echo "openscap returned an unexpected exit status of ${OSCAP_EXIT_CODE}" ;;
+              0 | 2 ) exit 0 ;;
+              * ) exit ${OSCAP_EXIT_CODE} ;;
           esac
 
-          if [ "${COMP_SCAN_COMPLETED}" == "true" ] ; then
-              echo "Converting XML results to HDF"
-              saf convert xccdf_results2hdf -i "${COMP_REPORT_XML_SOURCE}" -o "${COMP_REPORT_HDF_SOURCE}"
-              echo "Converting HDF results to SARIF"
-              DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 sarif-multitool convert -t Hdf -o "${COMP_REPORT_SARIF_SOURCE}" "${COMP_REPORT_HDF_SOURCE}.json"
-              echo "Conversions complete!"
-          fi
-
-          echo "COMP_SCAN_ATTEMPTED=${COMP_SCAN_ATTEMPTED}" >> "${GITHUB_ENV}"
-          echo "COMP_SCAN_COMPLETED=${COMP_SCAN_COMPLETED}" >> "${GITHUB_ENV}"
-          echo "COMP_SCAN_OK=${COMP_SCAN_OK}" >> "${GITHUB_ENV}"
-
-      - name: Remove the scanned container
-        if: ${{ env.CONTAINER_ID != '' }}
-        run: |
-          docker rm "${CONTAINER_ID}" || true
+      - name: Upload the STIG compliance report to the GitHub Artifacts tab
+        if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
+        continue-on-error: ${{ env.VULN_COMP_REQUIRED != 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: "compliance"
+          path: ${{ env.COMP_REPORT_PATTERN }}
 
       - name: Upload the STIG compliance report to the GitHub Security tab
         if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
@@ -868,7 +690,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: ${{ env.COMP_REPORT_SARIF_SOURCE }}
-          category: STIG-compliance
+          category: stig-compliance
 
       - name: Upload the STIG Compliance report to S3
         if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
@@ -878,17 +700,13 @@ jobs:
         run: |
           source .env
           cat .env
-          set -x
           COUNT=0
-          for SRC in XML HDF HTML SARIF ; do
-              SRC="COMP_REPORT_${SRC}_SOURCE"
-              VAL="${!SRC}"
-              [ -f "${VAL}" ] || continue
-              echo "Uploading [${VAL}] to [s3://${REPORTS_BUCKET}/${REPORTS_PATH}]..."
-              aws s3 cp "${VAL}" "s3://${REPORTS_BUCKET}/${REPORTS_PATH}/${VAL}"
+          while read SRC ; do
+              echo "Uploading [${SRC}] to [s3://${REPORTS_BUCKET}/${REPORTS_PATH}]..."
+              aws s3 cp "${SRC}" "s3://${REPORTS_BUCKET}/${REPORTS_PATH}/${SRC}"
               (( ++COUNT ))
-          done
-          echo "Uploaded ${COUNT} report(s)!"
+          done < <(find . -mindepth 0 -maxdepth 0 -type f -name "${COMP_REPORT_PATTERN}" | sort)
+          [ ${COUNT} -eq 0 ] || echo "Uploaded ${COUNT} report(s)!"
 
       - name: Scan for Vulnerabilities
         if: ${{ env.SCAN_VULN == 'true' }}
@@ -908,6 +726,14 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ${{ secrets.ECR_AWS_REGION }}
 
+      - name: Upload the vulnerabilities report to the GitHub artifacts tab
+        if: ${{ hashFiles(env.VULN_REPORT_SOURCE) != '' }}
+        continue-on-error: ${{ env.VULN_SCAN_REQUIRED != 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: "vulnerabilities"
+          path: ${{ env.VULN_REPORT_SOURCE }}
+
       - name: Upload the vulnerabilities report to the GitHub Security tab
         if: ${{ hashFiles(env.VULN_REPORT_SOURCE) != '' }}
         continue-on-error: ${{ env.VULN_SCAN_REQUIRED != 'true' }}
@@ -924,7 +750,6 @@ jobs:
         run: |
           source .env
           cat .env
-          set -x
           echo "Uploading [${VULN_REPORT_SOURCE}] to [s3://${REPORTS_BUCKET}/${REPORTS_PATH}]..."
           aws s3 cp "${VULN_REPORT_SOURCE}" "s3://${REPORTS_BUCKET}/${REPORTS_PATH}/${VULN_REPORT_SOURCE}"
           echo "Upload complete!"
