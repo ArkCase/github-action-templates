@@ -708,7 +708,7 @@ jobs:
               echo "Uploading [${SRC}] to [s3://${REPORTS_BUCKET}/${REPORTS_PATH}]..."
               aws s3 cp "${SRC}" "s3://${REPORTS_BUCKET}/${REPORTS_PATH}/${SRC}"
               (( ++COUNT ))
-          done < <(find . -min depth 1 -max depth 1 -type f -name "${COMP_REPORT_PATTERN}" | sort)
+          done < <(find . -mindepth 1 -maxdepth 1 -type f -name "${COMP_REPORT_PATTERN}" | sort)
           [ ${COUNT} -eq 0 ] || echo "Uploaded ${COUNT} report(s)!"
 
       - name: Scan for Vulnerabilities
@@ -768,7 +768,7 @@ jobs:
               echo "Uploading [${SRC}] to [s3://${REPORTS_BUCKET}/${REPORTS_PATH}]..."
               aws s3 cp "${SRC}" "s3://${REPORTS_BUCKET}/${REPORTS_PATH}/${SRC}"
               (( ++COUNT ))
-          done < <(find . -min depth 1 -max depth 1 -type f -name "${VULN_REPORT_PATTERN}" | sort)
+          done < <(find . -mindepth 1 -maxdepth 1 -type f -name "${VULN_REPORT_PATTERN}" | sort)
           [ ${COUNT} -eq 0 ] || echo "Uploaded ${COUNT} report(s)!"
 
       - name: Push the new tags
