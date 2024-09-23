@@ -720,6 +720,8 @@ jobs:
           ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
           ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
         run: |
+          echo "Launching the Trivy Scan for ${IMAGE_TO_SCAN}..."
+
           RESULTS_MOUNT="$(readlink -f ".")"
           DOCKER_SOCKET="/var/run/docker.sock"
           CMD=(
@@ -736,7 +738,7 @@ jobs:
                           --output "/results/${VULN_REPORT_SARIF_SOURCE}"
                           --pkg-types os,library
                           --exit-code 2
-                          --exit-on-eol
+                          --exit-on-eol 2
                           "${IMAGE_TO_SCAN}"
           )
           TRIVY_EXIT_CODE=0
