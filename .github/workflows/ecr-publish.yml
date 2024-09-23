@@ -75,6 +75,7 @@ env:
   GH_TOKEN: ${{ github.token }}
 
   OSCAP_SCANNER_IMAGE: "arkcase/openscap:20240922.02"
+  TRIVY_SCANNER_IMAGE: "aquasec/trivy:0.55.2"
 
   # Enable/disable STIG Compliance Scans
   SCAN_COMP: ${{ inputs.compliance-scan }}
@@ -715,27 +716,38 @@ jobs:
       - name: Scan for Vulnerabilities
         if: ${{ env.SCAN_VULN == 'true' }}
         continue-on-error: ${{ env.VULN_SCAN_REQUIRED != 'true' }}
-        uses: aquasecurity/trivy-action@0.24.0
-        with:
-          image-ref: ${{ env.IMAGE_TO_SCAN }}
-          exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: "os,library"
-          severity: "CRITICAL,HIGH"
-          format: "sarif"
-          output: ${{ env.VULN_REPORT_SARIF_SOURCE }}
-          timeout: ${{ env.SCAN_VULN_TIMEOUT }}
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.ECR_AWS_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ${{ secrets.ECR_AWS_REGION }}
-
-      - name: Convert the SARIF vulnerabilities report to HTML
-        if: ${{ hashFiles(env.VULN_REPORT_SARIF_SOURCE) != '' }}
-        continue-on-error: ${{ env.VULN_SCAN_REQUIRED != 'true' }}
         env:
           ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
         run: |
+          RESULTS_MOUNT="$(readlink -f ".")"
+          DOCKER_SOCKET="/var/run/docker.sock"
+          CMD=(
+              docker run
+                  --rm
+                  --name trivy-scanner
+                  --volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}"
+                  --volume "${RESULTS_MOUNT}:/results"
+                  "${TRIVY_SCANNER_IMAGE}"
+                      image
+                          --severity CRITICAL,HIGH
+                          --ignore-unfixed
+                          --format sarif
+                          --output "/results/${VULN_REPORT_SARIF_SOURCE}"
+                          --pkg-types os,library
+                          --exit-code 2
+                          --exit-on-eol
+                          "${IMAGE_TO_SCAN}"
+          )
+          TRIVY_EXIT_CODE=0
+          echo "Launching: ${CMD[@]@Q}"
+          "${CMD[@]}" || TRIVY_EXIT_CODE=${?}
+          case "${TRIVY_EXIT_CODE}" in
+              0 | 2 ) exit 0 ;;
+              * ) exit ${TRIVY_EXIT_CODE} ;;
+          esac
+
+          echo "Convert the SARIF vulnerabilities report to HTML"
           CMD=(
               docker run
                   --rm
