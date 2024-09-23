@@ -74,7 +74,7 @@ env:
   ECR_AWS_ORG_ID: ${{ secrets.ECR_AWS_ORG_ID }}
   GH_TOKEN: ${{ github.token }}
 
-  OSCAP_SCANNER_IMAGE: "arkcase/openscap:20240922.02"
+  OSCAP_SCANNER_IMAGE: "arkcase/openscap:20240923.01"
   TRIVY_SCANNER_IMAGE: "aquasec/trivy:0.55.2"
 
   # Enable/disable STIG Compliance Scans
