@@ -728,6 +728,7 @@ jobs:
 
           RESULTS_MOUNT="$(readlink -f ".")"
           DOCKER_SOCKET="/var/run/docker.sock"
+          # TODO: add support for registry authentication?
           CMD=(
               docker run 
                   --rm
@@ -735,7 +736,7 @@ jobs:
                   --volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}"
                   --volume "${RESULTS_MOUNT}:/results"
                   "${ECR_REGISTRY_PRIVATE}/${SCANNER_IMAGE}" \
-                      vulnerabilities --image "${IMAGE_TO_SCAN}"
+                      vulnerabilities "${IMAGE_TO_SCAN}"
           )
           # Run the command!
           EXIT_CODE=0
