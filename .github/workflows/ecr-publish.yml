@@ -74,8 +74,7 @@ env:
   ECR_AWS_ORG_ID: ${{ secrets.ECR_AWS_ORG_ID }}
   GH_TOKEN: ${{ github.token }}
 
-  OSCAP_SCANNER_IMAGE: "arkcase/openscap:20240923.01"
-  TRIVY_SCANNER_IMAGE: "aquasec/trivy:0.55.2"
+  SCANNER_IMAGE: "arkcase/security-scanner:20240925.01"
 
   # Enable/disable STIG Compliance Scans
   SCAN_COMP: ${{ inputs.compliance-scan }}
@@ -659,26 +658,26 @@ jobs:
 
           set -euo pipefail
 
-          echo "Launching the OSCAP Scan for ${IMAGE_TO_SCAN}..."
+          echo "Launching the Compliance Scan for ${IMAGE_TO_SCAN}..."
 
           RESULTS_MOUNT="$(readlink -f ".")"
           DOCKER_SOCKET="/var/run/docker.sock"
           CMD=(
               docker run 
                   --rm
-                  --name oscap-scanner
+                  --name compliance-scanner
                   --volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}"
                   --volume "${RESULTS_MOUNT}:/results"
-                  "${ECR_REGISTRY_PRIVATE}/${OSCAP_SCANNER_IMAGE}" \
-                      scan --image "${IMAGE_TO_SCAN}"
+                  "${ECR_REGISTRY_PRIVATE}/${SCANNER_IMAGE}" \
+                      compliance --image "${IMAGE_TO_SCAN}"
           )
           # Run the command!
-          OSCAP_EXIT_CODE=0
+          EXIT_CODE=0
           echo "Launching: ${CMD[@]@Q}"
-          "${CMD[@]}" || OSCAP_EXIT_CODE=${?}
-          case "${OSCAP_EXIT_CODE}" in
+          "${CMD[@]}" || EXIT_CODE=${?}
+          case "${EXIT_CODE}" in
               0 | 2 ) exit 0 ;;
-              * ) exit ${OSCAP_EXIT_CODE} ;;
+              * ) exit ${EXIT_CODE} ;;
           esac
 
       - name: Upload the STIG compliance report to the GitHub Artifacts tab
@@ -720,49 +719,31 @@ jobs:
           ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
           ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
         run: |
-          echo "Launching the Trivy Scan for ${IMAGE_TO_SCAN}..."
+          source .env
+          cat .env
+
+          set -euo pipefail
+
+          echo "Launching the Vulnerability Scan for ${IMAGE_TO_SCAN}..."
 
           RESULTS_MOUNT="$(readlink -f ".")"
           DOCKER_SOCKET="/var/run/docker.sock"
           CMD=(
-              docker run
+              docker run 
                   --rm
-                  --name trivy-scanner
+                  --name vulnerability-scanner
                   --volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}"
                   --volume "${RESULTS_MOUNT}:/results"
-                  "${TRIVY_SCANNER_IMAGE}"
-                      image
-                          --severity CRITICAL,HIGH
-                          --ignore-unfixed
-                          --format sarif
-                          --output "/results/${VULN_REPORT_SARIF_SOURCE}"
-                          --pkg-types os,library
-                          --exit-code 2
-                          --exit-on-eol 2
-                          "${IMAGE_TO_SCAN}"
+                  "${ECR_REGISTRY_PRIVATE}/${SCANNER_IMAGE}" \
+                      vulnerabilities --image "${IMAGE_TO_SCAN}"
           )
-
-          TRIVY_EXIT_CODE=0
+          # Run the command!
+          EXIT_CODE=0
           echo "Launching: ${CMD[@]@Q}"
-          "${CMD[@]}" || TRIVY_EXIT_CODE=${?}
-
-          if [ -f "${VULN_REPORT_SARIF_SOURCE}" ] ; then
-              echo "Convert the SARIF vulnerabilities report to HTML"
-              CMD=(
-                  docker run
-                      --rm
-                      --name sarif-convert
-                      --volume "$(readlink -f .):/host"
-                      "${ECR_REGISTRY_PRIVATE}/${OSCAP_SCANNER_IMAGE}"
-                          sarif html --output "/host/${VULN_REPORT_HTML_SOURCE}" "/host/${VULN_REPORT_SARIF_SOURCE}"
-              )
-              echo "Running: ${CMD[@]@Q}"
-              "${CMD[@]}"
-          fi
-
-          case "${TRIVY_EXIT_CODE}" in
+          "${CMD[@]}" || EXIT_CODE=${?}
+          case "${EXIT_CODE}" in
               0 | 2 ) exit 0 ;;
-              * ) exit ${TRIVY_EXIT_CODE} ;;
+              * ) exit ${EXIT_CODE} ;;
           esac
 
       - name: Upload the vulnerabilities report to the GitHub artifacts tab
