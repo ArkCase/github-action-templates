@@ -16,11 +16,11 @@ on:
         type: string
         default: "arkcase-container-scan-results"
 
-      big-container-scan:
-        description: "The bucket into which to upload the STIG Compliance and Vulnerability reports (defaults to 'arkcase-container-scan-results')"
+      big-container-size:
+        description: "The size threshold a container image must match or pass (in MB) to be considered big, and thus trigger extra disk space clearing for security testing (defaults to 2048)"
         required: false
-        type: boolean
-        default: false
+        type: string
+        default: "2048"
 
       compliance-scan:
         description: "Whether or not to scan for STIG compliance on the build"
@@ -81,7 +81,7 @@ env:
   GH_TOKEN: ${{ github.token }}
 
   SCANNER_IMAGE: "arkcase/security-scanner:20240925.01"
-  SCAN_BIG_CONTAINER: ${{ inputs.big-container-scan }}
+  BIG_CONTAINER_SIZE: ${{ inputs.big-container-size }}
 
   # Enable/disable STIG Compliance Scans
   SCAN_COMP: ${{ inputs.compliance-scan }}
@@ -111,10 +111,19 @@ jobs:
                   exit 1
               fi
           fi
+
           if [ -n "${PARAM_ARKCASE}" ] ; then
               # Parse for vailidity ... we'll examine it more closely later
               if [[ ! "${PARAM_ARKCASE}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
                   echo "ArkCase version is not valid: [${PARAM_ARKCASE}]"
+                  exit 1
+              fi
+          fi
+
+          # We only care if we're going to run a scan
+          if [ "${SCAN_COMP}" == "true" ] || [ "${SCAN_VULN}" == "true" ] ; then
+              if [[ ! "${BIG_CONTAINER_SIZE}" =~ ^[1-9][0-9]*$ ]] ; then
+                  echo "The big-container-size parameter is not a valid number: [${BIG_CONTAINER_SIZE}]"
                   exit 1
               fi
           fi
@@ -407,17 +416,6 @@ jobs:
           echo "export PUSH_TO_PUBLIC=${PUSH_TO_PUBLIC@Q}" >> .env
           echo "PUSH_TO_PUBLIC=${PUSH_TO_PUBLIC@Q}"
 
-      - name: Clear out extra disk space for a big container
-        uses: jlumbroso/free-disk-space@main
-        if: ${{ env.SCAN_BIG_CONTAINER == 'true' }}
-        with:
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: false
-          swap-storage: true
-
       - name: Build the Docker image
         env:
           ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
@@ -631,6 +629,16 @@ jobs:
 
           # Set some variables we'll need to consume later on
           IMAGE_TO_SCAN="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${LATEST_REVISION}"
+
+          # We only care about container size if we're running security scanning
+          BIG_CONTAINER="false"
+          if [ "${SCAN_COMP}" == "true" ] || [ "${SCAN_VULN}" == "true" ] ; then
+              # Identify the image size (in MB), and check to see if it qualifies as a "Big Container" (rounded up)
+              SIZE="$(docker image inspect "${IMAGE_TO_SCAN}" | jq -r "([.[].Size] | add) / (1024 * 1024) | ceil")"
+              [ ${SIZE} -ge ${BIG_CONTAINER_SIZE} ] && BIG_CONTAINER="true"
+          fi
+          echo "BIG_CONTAINER=${BIG_CONTAINER}" >> "${GITHUB_ENV}"
+
           REPORT_TARGET_PATH="${IMAGE_URI}/${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}/b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
 
           COMP_REPORT_PATTERN="compliance.*"
@@ -664,9 +672,15 @@ jobs:
               echo "${VAR}=${VAL}" >> "${GITHUB_ENV}"
           done
 
+      - name: Clear out extra disk space for security scans (image size >= ${{ env.BIG_CONTAINER_SIZE }}MB)
+        uses: jlumbroso/free-disk-space@main
+        if: ${{ env.BIG_CONTAINER == 'true' }}
+        with:
+          docker-images: false
+
       - name: Analyze STIG Compliance
         if: ${{ env.SCAN_COMP == 'true' }}
-        continue-on-error: ${{ env.COMP_SCAN_REQUIRED != 'true' }}
+        continue-on-error: ${{ env.SCAN_COMP_REQUIRED != 'true' }}
         env:
           ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
           ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
@@ -716,7 +730,7 @@ jobs:
 
       - name: Upload the STIG Compliance report to S3
         if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
-        continue-on-error: ${{ env.COMP_SCAN_REQUIRED != 'true' }}
+        continue-on-error: ${{ env.SCAN_COMP_REQUIRED != 'true' }}
         env:
           REPORTS_BUCKET: ${{ inputs.reports-bucket }}
         run: |
@@ -732,7 +746,7 @@ jobs:
 
       - name: Scan for Vulnerabilities
         if: ${{ env.SCAN_VULN == 'true' }}
-        continue-on-error: ${{ env.VULN_SCAN_REQUIRED != 'true' }}
+        continue-on-error: ${{ env.SCAN_VULN_REQUIRED != 'true' }}
         env:
           ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
           ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
@@ -767,7 +781,7 @@ jobs:
 
       - name: Upload the vulnerabilities report to the GitHub artifacts tab
         if: ${{ hashFiles(env.VULN_REPORT_SARIF_SOURCE) != '' }}
-        continue-on-error: ${{ env.VULN_SCAN_REQUIRED != 'true' }}
+        continue-on-error: ${{ env.SCAN_VULN_REQUIRED != 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: "vulnerabilities"
@@ -775,7 +789,7 @@ jobs:
 
       - name: Upload the vulnerabilities report to the GitHub Security tab
         if: ${{ hashFiles(env.VULN_REPORT_SARIF_SOURCE) != '' }}
-        continue-on-error: ${{ env.VULN_SCAN_REQUIRED != 'true' }}
+        continue-on-error: ${{ env.SCAN_VULN_REQUIRED != 'true' }}
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: ${{ env.VULN_REPORT_SARIF_SOURCE }}
@@ -783,7 +797,7 @@ jobs:
 
       - name: Upload the vulnerabilities report to S3
         if: ${{ hashFiles(env.VULN_REPORT_SARIF_SOURCE) != '' }}
-        continue-on-error: ${{ env.VULN_SCAN_REQUIRED != 'true' }}
+        continue-on-error: ${{ env.SCAN_VULN_REQUIRED != 'true' }}
         env:
           REPORTS_BUCKET: ${{ inputs.reports-bucket }}
         run: |
