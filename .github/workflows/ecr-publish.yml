@@ -678,7 +678,7 @@ jobs:
         with:
           docker-images: false
 
-      - name: Analyze STIG Compliance
+      - name: Scan for STIG compliance
         if: ${{ env.SCAN_COMP == 'true' }}
         continue-on-error: ${{ env.SCAN_COMP_REQUIRED != 'true' }}
         env:
@@ -728,7 +728,7 @@ jobs:
           sarif_file: ${{ env.COMP_REPORT_SARIF_SOURCE }}
           category: stig-compliance
 
-      - name: Upload the STIG Compliance report to S3
+      - name: Upload the STIG compliance report to S3
         if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
         continue-on-error: ${{ env.SCAN_COMP_REQUIRED != 'true' }}
         env:
@@ -744,7 +744,7 @@ jobs:
           done < <(find . -mindepth 1 -maxdepth 1 -type f -name "${COMP_REPORT_PATTERN}" | sort)
           [ ${COUNT} -eq 0 ] || echo "Uploaded ${COUNT} report(s)!"
 
-      - name: Scan for Vulnerabilities
+      - name: Scan for vulnerabilities
         if: ${{ env.SCAN_VULN == 'true' }}
         continue-on-error: ${{ env.SCAN_VULN_REQUIRED != 'true' }}
         env:
