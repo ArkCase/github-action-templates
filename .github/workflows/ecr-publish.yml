@@ -400,6 +400,16 @@ jobs:
           echo "export PUSH_TO_PUBLIC=${PUSH_TO_PUBLIC@Q}" >> .env
           echo "PUSH_TO_PUBLIC=${PUSH_TO_PUBLIC@Q}"
 
+      - name: Clear out unnecessary disk space consumption
+        uses: jlumbroso/free-disk-space@main
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: false
+          swap-storage: true
+
       - name: Build the Docker image
         env:
           ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
