@@ -80,20 +80,16 @@ env:
   ECR_AWS_ORG_ID: ${{ secrets.ECR_AWS_ORG_ID }}
   GH_TOKEN: ${{ github.token }}
 
-  SCANNER_IMAGE: "arkcase/security-scanner:20240925.01"
+  SCANNER_IMAGE: "arkcase/security-scanner:20240927.01"
   BIG_CONTAINER_SIZE: ${{ inputs.big-container-size }}
 
   # Enable/disable STIG Compliance Scans
   SCAN_COMP: ${{ inputs.compliance-scan }}
   SCAN_COMP_REQUIRED: ${{ inputs.compliance-required }}
-  # TODO: Make this configurable via input?
-  SCAN_COMP_TIMEOUT: ""
 
   # Enable/disable Vulnerability Scans
   SCAN_VULN: ${{ inputs.vulnerabilities-scan }}
   SCAN_VULN_REQUIRED: ${{ inputs.vulnerabilities-required }}
-  # TODO: Make this configurable via input?
-  SCAN_VULN_TIMEOUT: "5m"
 
 jobs:
   ECR-Publishing:
@@ -672,7 +668,7 @@ jobs:
               echo "${VAR}=${VAL}" >> "${GITHUB_ENV}"
           done
 
-      - name: Clear out extra disk space for security scans (image size >= ${{ env.BIG_CONTAINER_SIZE }}MB)
+      - name: Clear out extra disk space for security scans due to a large container image
         uses: jlumbroso/free-disk-space@main
         if: ${{ env.BIG_CONTAINER == 'true' }}
         with:
@@ -701,7 +697,7 @@ jobs:
                   --volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}"
                   --volume "${RESULTS_MOUNT}:/results"
                   "${ECR_REGISTRY_PRIVATE}/${SCANNER_IMAGE}" \
-                      compliance --image "${IMAGE_TO_SCAN}"
+                      compliance "${IMAGE_TO_SCAN}"
           )
           # Run the command!
           EXIT_CODE=0
@@ -760,7 +756,6 @@ jobs:
 
           RESULTS_MOUNT="$(readlink -f ".")"
           DOCKER_SOCKET="/var/run/docker.sock"
-          # TODO: add support for registry authentication?
           CMD=(
               docker run 
                   --rm
