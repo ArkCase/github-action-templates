@@ -590,6 +590,8 @@ jobs:
               fi
           fi
 
+          df -kh
+
           (
               set -x
               docker build "${BUILD_ARGS[@]}" "${TAGS[@]}" .
@@ -659,6 +661,7 @@ jobs:
           set -euo pipefail
 
           echo "Launching the Compliance Scan for ${IMAGE_TO_SCAN}..."
+          df -kh
 
           RESULTS_MOUNT="$(readlink -f ".")"
           DOCKER_SOCKET="/var/run/docker.sock"
@@ -725,6 +728,7 @@ jobs:
           set -euo pipefail
 
           echo "Launching the Vulnerability Scan for ${IMAGE_TO_SCAN}..."
+          df -kh
 
           RESULTS_MOUNT="$(readlink -f ".")"
           DOCKER_SOCKET="/var/run/docker.sock"
@@ -783,6 +787,8 @@ jobs:
         run: |
           source .env
           cat .env
+
+          df -kh
 
           # We split this up b/c if this build doesn't pass the security scan,
           # it won't be uploaded or tagged (eventually :D)
