@@ -16,6 +16,12 @@ on:
         type: string
         default: "arkcase-container-scan-results"
 
+      big-container-scan:
+        description: "The bucket into which to upload the STIG Compliance and Vulnerability reports (defaults to 'arkcase-container-scan-results')"
+        required: false
+        type: boolean
+        default: false
+
       compliance-scan:
         description: "Whether or not to scan for STIG compliance on the build"
         required: false
@@ -75,6 +81,7 @@ env:
   GH_TOKEN: ${{ github.token }}
 
   SCANNER_IMAGE: "arkcase/security-scanner:20240925.01"
+  SCAN_BIG_CONTAINER: ${{ inputs.big-container-scan }}
 
   # Enable/disable STIG Compliance Scans
   SCAN_COMP: ${{ inputs.compliance-scan }}
@@ -400,8 +407,9 @@ jobs:
           echo "export PUSH_TO_PUBLIC=${PUSH_TO_PUBLIC@Q}" >> .env
           echo "PUSH_TO_PUBLIC=${PUSH_TO_PUBLIC@Q}"
 
-      - name: Clear out unnecessary disk space consumption
+      - name: Clear out extra disk space for a big container
         uses: jlumbroso/free-disk-space@main
+        if: ${{ env.SCAN_BIG_CONTAINER == 'true' }}
         with:
           android: true
           dotnet: true
@@ -600,8 +608,6 @@ jobs:
               fi
           fi
 
-          df -kh
-
           (
               set -x
               docker build "${BUILD_ARGS[@]}" "${TAGS[@]}" .
@@ -671,7 +677,6 @@ jobs:
           set -euo pipefail
 
           echo "Launching the Compliance Scan for ${IMAGE_TO_SCAN}..."
-          df -kh
 
           RESULTS_MOUNT="$(readlink -f ".")"
           DOCKER_SOCKET="/var/run/docker.sock"
@@ -738,7 +743,6 @@ jobs:
           set -euo pipefail
 
           echo "Launching the Vulnerability Scan for ${IMAGE_TO_SCAN}..."
-          df -kh
 
           RESULTS_MOUNT="$(readlink -f ".")"
           DOCKER_SOCKET="/var/run/docker.sock"
@@ -797,8 +801,6 @@ jobs:
         run: |
           source .env
           cat .env
-
-          df -kh
 
           # We split this up b/c if this build doesn't pass the security scan,
           # it won't be uploaded or tagged (eventually :D)
