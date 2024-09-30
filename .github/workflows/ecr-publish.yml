@@ -633,9 +633,6 @@ jobs:
               git tag --force "${PREFIX}/${R//_/+}"
           done
 
-          # Set some variables we'll need to consume later on
-          IMAGE_TO_SCAN="${AUTHORITATIVE_TAG}"
-
           # We only care about container size if we're running security scanning
           BIG_CONTAINER="false"
           if [ "${SCAN_COMP}" == "true" ] || [ "${SCAN_VULN}" == "true" ] ; then
@@ -658,7 +655,7 @@ jobs:
           VULN_REPORT_SARIF_SOURCE="vulnerabilities.sarif"
 
           VARS=(
-              IMAGE_TO_SCAN
+              AUTHORITATIVE_TAG
               REPORT_TARGET_PATH
 
               COMP_REPORT_PATTERN
@@ -696,7 +693,7 @@ jobs:
 
           set -euo pipefail
 
-          echo "Launching the Compliance Scan for ${IMAGE_TO_SCAN}..."
+          echo "Launching the Compliance Scan for ${AUTHORITATIVE_TAG}..."
 
           RESULTS_MOUNT="$(readlink -f ".")"
           DOCKER_SOCKET="/var/run/docker.sock"
@@ -707,7 +704,7 @@ jobs:
                   --volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}"
                   --volume "${RESULTS_MOUNT}:/results"
                   "${ECR_REGISTRY_PRIVATE}/${SCANNER_IMAGE}" \
-                      compliance "${IMAGE_TO_SCAN}"
+                      compliance "${AUTHORITATIVE_TAG}"
           )
           # Run the command!
           EXIT_CODE=0
@@ -759,7 +756,7 @@ jobs:
 
           set -euo pipefail
 
-          echo "Launching the Vulnerability Scan for ${IMAGE_TO_SCAN}..."
+          echo "Launching the Vulnerability Scan for ${AUTHORITATIVE_TAG}..."
 
           RESULTS_MOUNT="$(readlink -f ".")"
           DOCKER_SOCKET="/var/run/docker.sock"
@@ -770,7 +767,7 @@ jobs:
                   --volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}"
                   --volume "${RESULTS_MOUNT}:/results"
                   "${ECR_REGISTRY_PRIVATE}/${SCANNER_IMAGE}" \
-                      vulnerabilities "${IMAGE_TO_SCAN}"
+                      vulnerabilities "${AUTHORITATIVE_TAG}"
           )
           # Run the command!
           EXIT_CODE=0
