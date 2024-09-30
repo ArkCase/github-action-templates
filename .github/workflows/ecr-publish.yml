@@ -602,13 +602,6 @@ jobs:
               fi
           fi
 
-          # Set some variables we'll need to consume later on
-          AUTHORITATIVE_TAG="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${EXACT_REVISION}"
-          (
-              set -x
-              docker build "${BUILD_ARGS[@]}" -t "${AUTHORITATIVE_TAG}" .
-          ) || exit ${?}
-
           # We only build to a single tag b/c the security scanner pukes otherwise
           # (don't ask XD). We instead create out-of-band tags for the container
           # image. This is OK, b/c the "AUTHORITATIVE_TAG" is the most exact tag
@@ -617,14 +610,12 @@ jobs:
           #
           # We do it like this to avoid having to modify the "docker push"
           # section, below.
-          for TAG in "${TAGS[@]}" ; do
-              # Avoid duplication
-              [ "${TAG}" == "${AUTHORITATIVE_TAG}" ] && continue
-              (
-                  set -x
-                  docker tag "${AUTHORITATIVE_TAG}" "${TAG}"
-              ) || exit ${?}
-          done
+          AUTHORITATIVE_TAG="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${EXACT_REVISION}"
+          echo "AUTHORITATIVE_TAG=${AUTHORITATIVE_TAG@Q}" >> .env
+          (
+              set -x
+              docker build "${BUILD_ARGS[@]}" -t "${AUTHORITATIVE_TAG}" .
+          ) || exit ${?}
 
           # Once the build succeeds, we create the required tags as appropriate
           if [ -z "${REVISION_PRERELEASE}" ] ; then
@@ -1010,5 +1001,6 @@ jobs:
           # Iterate over the array of built artifacts, and push them
           for BUILD in "${BUILDS[@]}" ; do
               echo "Pushing [${BUILD}] ..."
+              [ "${AUTHORITATIVE_TAG}" == "${BUILD}" ] || docker tag "${AUTHORITATIVE_TAG}" "${BUILD}"
               docker push "${BUILD}"
           done
