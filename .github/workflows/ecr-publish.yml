@@ -734,8 +734,8 @@ jobs:
           cat .env
           COUNT=0
           while read SRC ; do
-              echo "Uploading [${SRC}] to [s3://${REPORTS_BUCKET}/${REPORTS_PATH}]..."
-              aws s3 cp "${SRC}" "s3://${REPORTS_BUCKET}/${REPORTS_PATH}/${SRC}"
+              echo "Uploading [${SRC}] to [s3://${REPORTS_BUCKET}/${REPORT_TARGET_PATH}]..."
+              aws s3 cp "${SRC}" "s3://${REPORTS_BUCKET}/${REPORT_TARGET_PATH}/${SRC}"
               (( ++COUNT ))
           done < <(find . -mindepth 1 -maxdepth 1 -type f -name "${COMP_REPORT_PATTERN}" | sort)
           [ ${COUNT} -eq 0 ] || echo "Uploaded ${COUNT} report(s)!"
@@ -800,8 +800,8 @@ jobs:
           cat .env
           COUNT=0
           while read SRC ; do
-              echo "Uploading [${SRC}] to [s3://${REPORTS_BUCKET}/${REPORTS_PATH}]..."
-              aws s3 cp "${SRC}" "s3://${REPORTS_BUCKET}/${REPORTS_PATH}/${SRC}"
+              echo "Uploading [${SRC}] to [s3://${REPORTS_BUCKET}/${REPORT_TARGET_PATH}]..."
+              aws s3 cp "${SRC}" "s3://${REPORTS_BUCKET}/${REPORT_TARGET_PATH}/${SRC}"
               (( ++COUNT ))
           done < <(find . -mindepth 1 -maxdepth 1 -type f -name "${VULN_REPORT_PATTERN}" | sort)
           [ ${COUNT} -eq 0 ] || echo "Uploaded ${COUNT} report(s)!"
