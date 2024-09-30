@@ -513,8 +513,8 @@ jobs:
           REVISIONS+=("${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}_b${GITHUB_RUN_NUMBER}${REVISION_METADATA}")
 
           # This is the most exact revision, which will be used for "latest" computation
-          LATEST_REVISION="${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}_b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
-          REVISIONS+=("${LATEST_REVISION}")
+          EXACT_REVISION="${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}_b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
+          REVISIONS+=("${EXACT_REVISION}")
 
           TARGETS=()
           TARGETS+=("${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}")
@@ -528,7 +528,7 @@ jobs:
               for R in "${REVISIONS[@]}" ; do
                   BUILD="${T}:${R}"
                   echo "BUILDS+=(${BUILD@Q})" >> .env
-                  TAGS+=(--tag "${BUILD}")
+                  TAGS+=("${BUILD}")
               done
           done
 
@@ -560,7 +560,7 @@ jobs:
                       # alongside all other revisions. This way the post-processing
                       # sort+grep+head will yield the revision that should carry the
                       # "latest" moniker
-                      echo "${LATEST_REVISION}"
+                      echo "${EXACT_REVISION}"
                       aws ecr describe-images --repository-name "${IMAGE_URI}" | \
                           jq -r "${JQ_FIND_IMAGE_TAGS}"
                   ) | \
@@ -568,10 +568,10 @@ jobs:
                   sort --reverse --version-sort --unique | \
                   head -1
               )"
-              if [ "${LATEST_PRV}" == "${LATEST_REVISION}" ] ; then
+              if [ "${LATEST_PRV}" == "${EXACT_REVISION}" ] ; then
                   BUILD="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${LATEST}"
                   echo "BUILDS+=(${BUILD@Q})" >> .env
-                  TAGS+=(--tag "${BUILD}")
+                  TAGS+=("${BUILD}")
                   "${LATEST_ADDED}" || REVISIONS+=("${LATEST}")
                   LATEST_ADDED="true"
               fi
@@ -584,7 +584,7 @@ jobs:
                           # alongside all other revisions. This way the post-processing
                           # sort+grep+head will yield the revision that should carry the
                           # "latest" moniker
-                          echo "${LATEST_REVISION}"
+                          echo "${EXACT_REVISION}"
                           aws ecr-public describe-images --repository-name "${IMAGE_NAME}" | \
                               jq -r "${JQ_FIND_IMAGE_TAGS}"
                       ) | \
@@ -592,20 +592,39 @@ jobs:
                       sort --reverse --version-sort --unique | \
                       head -1
                   )"
-                  if [ "${LATEST_PUB}" == "${LATEST_REVISION}" ] ; then
+                  if [ "${LATEST_PUB}" == "${EXACT_REVISION}" ] ; then
                       BUILD="${ECR_REGISTRY_PUBLIC}/${IMAGE_URI}:${LATEST}"
                       echo "BUILDS+=(${BUILD@Q})" >> .env
-                      TAGS+=(--tag "${BUILD}")
+                      TAGS+=("${BUILD}")
                       "${LATEST_ADDED}" || REVISIONS+=("${LATEST}")
                       LATEST_ADDED="true"
                   fi
               fi
           fi
 
+          # Set some variables we'll need to consume later on
+          AUTHORITATIVE_TAG="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${EXACT_REVISION}"
           (
               set -x
-              docker build "${BUILD_ARGS[@]}" "${TAGS[@]}" .
+              docker build "${BUILD_ARGS[@]}" -t "${AUTHORITATIVE_TAG}" .
           ) || exit ${?}
+
+          # We only build to a single tag b/c the security scanner pukes otherwise
+          # (don't ask XD). We instead create out-of-band tags for the container
+          # image. This is OK, b/c the "AUTHORITATIVE_TAG" is the most exact tag
+          # that describes this specific build being executed right this second,
+          # and as such can be used as the tag's canonical name.
+          #
+          # We do it like this to avoid having to modify the "docker push"
+          # section, below.
+          for TAG in "${TAGS[@]}" ; do
+              # Avoid duplication
+              [ "${TAG}" == "${AUTHORITATIVE_TAG}" ] && continue
+              (
+                  set -x
+                  docker tag "${AUTHORITATIVE_TAG}" "${TAG}"
+              ) || exit ${?}
+          done
 
           # Once the build succeeds, we create the required tags as appropriate
           if [ -z "${REVISION_PRERELEASE}" ] ; then
@@ -624,13 +643,13 @@ jobs:
           done
 
           # Set some variables we'll need to consume later on
-          IMAGE_TO_SCAN="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${LATEST_REVISION}"
+          IMAGE_TO_SCAN="${AUTHORITATIVE_TAG}"
 
           # We only care about container size if we're running security scanning
           BIG_CONTAINER="false"
           if [ "${SCAN_COMP}" == "true" ] || [ "${SCAN_VULN}" == "true" ] ; then
               # Identify the image size (in MB), and check to see if it qualifies as a "Big Container" (rounded up)
-              SIZE="$(docker image inspect "${IMAGE_TO_SCAN}" | jq -r "([.[].Size] | add) / (1024 * 1024) | ceil")"
+              SIZE="$(docker image inspect "${AUTHORITATIVE_TAG}" | jq -r "([.[].Size] | add) / (1024 * 1024) | ceil")"
               [ ${SIZE} -ge ${BIG_CONTAINER_SIZE} ] && BIG_CONTAINER="true"
           fi
           echo "BIG_CONTAINER=${BIG_CONTAINER}" >> "${GITHUB_ENV}"
