@@ -724,7 +724,7 @@ jobs:
 
       - name: Upload the STIG compliance report to the GitHub Security tab
         if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
-        continue-on-error: always()
+        continue-on-error: true
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: ${{ env.COMP_REPORT_SARIF_SOURCE }}
@@ -788,7 +788,7 @@ jobs:
 
       - name: Upload the vulnerabilities report to the GitHub Security tab
         if: ${{ hashFiles(env.VULN_REPORT_SARIF_SOURCE) != '' }}
-        continue-on-error: always()
+        continue-on-error: true
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: ${{ env.VULN_REPORT_SARIF_SOURCE }}
