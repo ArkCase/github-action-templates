@@ -175,10 +175,6 @@ jobs:
       - name: Login to Amazon ECR (Private)
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
-        with:
-          mask-password:  "true"
-          registry-type: private
-          skip-logout: false
 
         # The AWS login needs to happen before the build b/c the
         # ECR_REGISTRY_PUBLIC value is computed here
