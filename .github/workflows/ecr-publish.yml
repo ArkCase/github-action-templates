@@ -7,7 +7,10 @@ on:
         required: false
         type: string
       arkcase:
-        description: "The ArkCase version to use for construction (computed from the Dockerfile if not provided)"
+        description: "The ArkCase version to use for construction (ignored, preserved for backwards compatibility)"
+        required: false
+      portal:
+        description: "The FOIA Portal version to use for construction (computed from the Dockerfile if not provided)"
         required: false
         type: string
       reports-bucket:
@@ -98,7 +101,7 @@ jobs:
       - name: Validate the parameters
         env:
           PARAM_REVISION: ${{ inputs.revision }}
-          PARAM_ARKCASE: ${{ inputs.arkcase }}
+          PARAM_PORTAL: ${{ inputs.portal }}
         run: |
           if [ -n "${PARAM_REVISION}" ] ; then
               # Parse for vailidity ... we'll examine it more closely later
@@ -108,10 +111,10 @@ jobs:
               fi
           fi
 
-          if [ -n "${PARAM_ARKCASE}" ] ; then
+          if [ -n "${PARAM_PORTAL}" ] ; then
               # Parse for vailidity ... we'll examine it more closely later
-              if [[ ! "${PARAM_ARKCASE}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
-                  echo "ArkCase version is not valid: [${PARAM_ARKCASE}]"
+              if [[ ! "${PARAM_PORTAL}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
+                  echo "The FOIA Portal version is not valid: [${PARAM_PORTAL}]"
                   exit 1
               fi
           fi
@@ -138,7 +141,7 @@ jobs:
       - name: Initialize the environment file
         env:
           PARAM_REVISION: ${{ inputs.revision }}
-          PARAM_ARKCASE: ${{ inputs.arkcase }}
+          PARAM_PORTAL: ${{ inputs.portal }}
         run: |
           # Start with a clean environment
           : > .env
@@ -150,8 +153,8 @@ jobs:
           echo "export PARAM_REVISION=${PARAM_REVISION@Q}" >> .env
           echo "PARAM_REVISION=${PARAM_REVISION@Q}"
 
-          echo "export PARAM_ARKCASE=${PARAM_ARKCASE@Q}" >> .env
-          echo "PARAM_ARKCASE=${PARAM_ARKCASE@Q}"
+          echo "export PARAM_PORTAL=${PARAM_PORTAL@Q}" >> .env
+          echo "PARAM_PORTAL=${PARAM_PORTAL@Q}"
 
       - name: Docker Login to Alfresco Quay.IO (if applicable)
         env:
@@ -227,8 +230,8 @@ jobs:
 
           # Make sure it's defined if it isn't already
           REVISION="${PARAM_REVISION}"
-          ARKCASE_VER="${PARAM_ARKCASE}"
-          if [ -z "${REVISION}" ] || [ -z "${ARKCASE_VER}" ] ; then
+          PORTAL_VER="${PARAM_PORTAL}"
+          if [ -z "${REVISION}" ] || [ -z "${PORTAL_VER}" ] ; then
               # Parse out the tag, handle the case when it's not there
               readarray -t NEW_VERSIONS < <(
                   set -eo pipefail
@@ -258,7 +261,7 @@ jobs:
                           sed -e "s;^\s*ARG\s;export ${PREFIX};g"
                   )
 
-                  for R in "VER" "ARKCASE_VER" ; do
+                  for R in "VER" "PORTAL_VER" ; do
                       [ -z "${PREFIX}" ] || R="${PREFIX}${R}"
                       # This checks for each variable and outputs its
                       # value if present, or an empty string if absent
@@ -282,11 +285,11 @@ jobs:
                   REVISION="${NEW_VERSIONS[0]}"
               fi
 
-              # We only override the ArkCase version if it wasn't provided as a parameter
-              [ -z "${ARKCASE_VER}" ] && ARKCASE_VER="${NEW_VERSIONS[1]}"
+              # We only override the FOIA Portal version if it wasn't provided as a parameter
+              [ -z "${PORTAL_VER}" ] && PORTAL_VER="${NEW_VERSIONS[1]}"
 
               echo "Computed REVISION=${REVISION}"
-              echo "Computed ARKCASE_VER=${ARKCASE_VER}"
+              echo "Computed PORTAL_VER=${PORTAL_VER}"
           fi
 
           # Parse for vailidity ... we'll examine it more closely later
@@ -318,10 +321,10 @@ jobs:
               fi
           fi
 
-          # Do the same validation, but for the ArkCase version
-          if [ -n "${ARKCASE_VER}" ] ; then
-              if [[ ! "${ARKCASE_VER}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
-                  echo "ArkCase version is not valid: [${ARKCASE_VER}]"
+          # Do the same validation, but for the FOIA Portal version
+          if [ -n "${PORTAL_VER}" ] ; then
+              if [[ ! "${PORTAL_VER}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
+                  echo "The FOIA Portal version is not valid: [${PORTAL_VER}]"
                   exit 1
               fi
 
@@ -335,7 +338,7 @@ jobs:
                   if [[ "${ACM_PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT ]] ; then
                       ACM_SNAPSHOT="true"
                   else
-                      echo "Illegal use of the word 'SNAPSHOT' as [${PRERELASE}] - must be the last word: [${ARKCASE_VER}]"
+                      echo "Illegal use of the word 'SNAPSHOT' as [${PRERELASE}] - must be the last word: [${PORTAL_VER}]"
                       exit 1
                   fi
               fi
@@ -392,13 +395,13 @@ jobs:
           echo "REVISION_METADATA=${METADATA@Q}"
           echo "REVISION_SNAPSHOT=${REVISION_SNAPSHOT@Q}"
 
-          if [ -n "${ARKCASE_VER}" ] ; then
-              echo "export ARKCASE_VER=${ARKCASE_VER@Q}" >> .env
+          if [ -n "${PORTAL_VER}" ] ; then
+              echo "export PORTAL_VER=${PORTAL_VER@Q}" >> .env
               echo "export ACM_BASE_NUMBER=${ACM_BASE_NUMBER@Q}" >> .env
               echo "export ACM_PRERELEASE=${ACM_PRERELEASE@Q}" >> .env
               echo "export ACM_METADATA=${ACM_METADATA@Q}" >> .env
               echo "export ACM_SNAPSHOT=${ACM_SNAPSHOT@Q}" >> .env
-              echo "ARKCASE_VER=${ARKCASE_VER@Q}"
+              echo "PORTAL_VER=${PORTAL_VER@Q}"
               echo "ACM_BASE_NUMBER=${ACM_BASE_NUMBER@Q}"
               echo "ACM_PRERELEASE=${ACM_PRERELEASE@Q}"
               echo "ACM_METADATA=${ACM_METADATA@Q}"
@@ -436,7 +439,7 @@ jobs:
 
           # Always use the base version for this ...
           BUILD_ARGS+=(--build-arg "VER=${REVISION}")
-          [ -n "${ARKCASE_VER:-}" ] && BUILD_ARGS+=(--build-arg "ARKCASE_VER=${ARKCASE_VER}")
+          [ -n "${PORTAL_VER:-}" ] && BUILD_ARGS+=(--build-arg "PORTAL_VER=${PORTAL_VER}")
 
           # Select the base registries
           BUILD_ARGS+=(--build-arg "PRIVATE_REGISTRY=${ECR_REGISTRY_PRIVATE}")
