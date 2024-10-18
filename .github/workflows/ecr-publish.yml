@@ -9,6 +9,7 @@ on:
       arkcase:
         description: "The ArkCase version to use for construction (ignored, preserved for backwards compatibility)"
         required: false
+        type: string
       portal:
         description: "The FOIA Portal version to use for construction (computed from the Dockerfile if not provided)"
         required: false
