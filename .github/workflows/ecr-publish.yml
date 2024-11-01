@@ -95,6 +95,9 @@ env:
   SCAN_VULN: ${{ inputs.vulnerabilities-scan }}
   SCAN_VULN_REQUIRED: ${{ inputs.vulnerabilities-required }}
 
+  DEVEL_KEEP_DAYS: 30
+  SNAPSHOT_KEEP_DAYS: 30
+
 jobs:
   ECR-Publishing:
     runs-on: ubuntu-latest
@@ -941,13 +944,13 @@ jobs:
               },
               {
                 "rulePriority": 200,
-                "description": "Keep only the top-level SNAPSHOTS built in the past 30 days",
+                "description": "Keep only the top-level SNAPSHOTS built in the past ${SNAPSHOT_KEEP_DAYS} days",
                 "selection": {
                   "tagStatus": "tagged",
                   "tagPatternList": [ "*-SNAPSHOT" ],
                   "countType": "sinceImagePushed",
                   "countUnit": "days",
-                  "countNumber": 30
+                  "countNumber": ${SNAPSHOT_KEEP_DAYS}
                 },
                 "action": {
                   "type": "expire"
@@ -969,13 +972,13 @@ jobs:
               },
               {
                 "rulePriority": 400,
-                "description": "Keep only fresh-built devel-* tags that AREN'T the top-level SNAPSHOTs, pushed in the last 15 days",
+                "description": "Keep only fresh-built devel-* tags that AREN'T the top-level SNAPSHOTs, pushed in the last ${DEVEL_KEEP_DAYS} days",
                 "selection": {
                   "tagStatus": "tagged",
                   "tagPatternList": [ "devel-*" ],
                   "countType": "sinceImagePushed",
                   "countUnit": "days",
-                  "countNumber": 15
+                  "countNumber": ${DEVEL_KEEP_DAYS}
                 },
                 "action": {
                   "type": "expire"
