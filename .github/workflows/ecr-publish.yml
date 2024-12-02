@@ -332,15 +332,15 @@ jobs:
                   exit 1
               fi
 
-              ACM_BASE_NUMBER="${BASH_REMATCH[1]}"
-              ACM_PRERELEASE="${BASH_REMATCH[5]}"
-              ACM_METADATA="${BASH_REMATCH[8]}"
+              PORTAL_BASE_NUMBER="${BASH_REMATCH[1]}"
+              PORTAL_PRERELEASE="${BASH_REMATCH[5]}"
+              PORTAL_METADATA="${BASH_REMATCH[8]}"
 
               # If the pre-release info is a "SNAPSHOT", make sure it's used properly
-              ACM_SNAPSHOT="false"
-              if [[ "${ACM_PRERELEASE}" =~ SNAPSHOT ]] ; then
-                  if [[ "${ACM_PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT ]] ; then
-                      ACM_SNAPSHOT="true"
+              PORTAL_SNAPSHOT="false"
+              if [[ "${PORTAL_PRERELEASE}" =~ SNAPSHOT ]] ; then
+                  if [[ "${PORTAL_PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT ]] ; then
+                      PORTAL_SNAPSHOT="true"
                   else
                       echo "Illegal use of the word 'SNAPSHOT' as [${PRERELASE}] - must be the last word: [${PORTAL_VER}]"
                       exit 1
@@ -360,17 +360,17 @@ jobs:
               fi
               echo "REVISION_QUALITY=${REVISION_QUALITY}"
 
-              if "${ACM_SNAPSHOT}" ; then
-                  ACM_QUALITY="0"
-              elif [ -n "${ACM_PRERELEASE}" ] ; then
-                  ACM_QUALITY="1"
+              if "${PORTAL_SNAPSHOT}" ; then
+                  PORTAL_QUALITY="0"
+              elif [ -n "${PORTAL_PRERELEASE}" ] ; then
+                  PORTAL_QUALITY="1"
               else
-                  ACM_QUALITY="2"
+                  PORTAL_QUALITY="2"
               fi
-              echo "ACM_QUALITY=${ACM_QUALITY}"
+              echo "PORTAL_QUALITY=${PORTAL_QUALITY}"
 
-              if [ ${REVISION_QUALITY} -gt ${ACM_QUALITY} ] ; then
-                  echo "The target revision quality (${REVISION_QUALITY}) is higher than the base ArkCase quality (${ACM_QUALITY}), and this is not allowed"
+              if [ ${REVISION_QUALITY} -gt ${PORTAL_QUALITY} ] ; then
+                  echo "The target revision quality (${REVISION_QUALITY}) is higher than the Portal component quality (${PORTAL_QUALITY}), and this is not allowed"
                   exit 1
               fi
           fi
@@ -401,15 +401,15 @@ jobs:
 
           if [ -n "${PORTAL_VER}" ] ; then
               echo "export PORTAL_VER=${PORTAL_VER@Q}" >> .env
-              echo "export ACM_BASE_NUMBER=${ACM_BASE_NUMBER@Q}" >> .env
-              echo "export ACM_PRERELEASE=${ACM_PRERELEASE@Q}" >> .env
-              echo "export ACM_METADATA=${ACM_METADATA@Q}" >> .env
-              echo "export ACM_SNAPSHOT=${ACM_SNAPSHOT@Q}" >> .env
+              echo "export PORTAL_BASE_NUMBER=${PORTAL_BASE_NUMBER@Q}" >> .env
+              echo "export PORTAL_PRERELEASE=${PORTAL_PRERELEASE@Q}" >> .env
+              echo "export PORTAL_METADATA=${PORTAL_METADATA@Q}" >> .env
+              echo "export PORTAL_SNAPSHOT=${PORTAL_SNAPSHOT@Q}" >> .env
               echo "PORTAL_VER=${PORTAL_VER@Q}"
-              echo "ACM_BASE_NUMBER=${ACM_BASE_NUMBER@Q}"
-              echo "ACM_PRERELEASE=${ACM_PRERELEASE@Q}"
-              echo "ACM_METADATA=${ACM_METADATA@Q}"
-              echo "ACM_SNAPSHOT=${ACM_SNAPSHOT@Q}"
+              echo "PORTAL_BASE_NUMBER=${PORTAL_BASE_NUMBER@Q}"
+              echo "PORTAL_PRERELEASE=${PORTAL_PRERELEASE@Q}"
+              echo "PORTAL_METADATA=${PORTAL_METADATA@Q}"
+              echo "PORTAL_SNAPSHOT=${PORTAL_SNAPSHOT@Q}"
           fi
 
           # We only push to public if this is a public repository,
