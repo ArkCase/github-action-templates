@@ -626,11 +626,14 @@ jobs:
 
           # Once the build succeeds, we create the required tags as appropriate
           if [ -z "${REVISION_PRERELEASE}" ] ; then
+              SCAN_REPORT_RETENTION_DAYS="90"
               PREFIX="release"
           elif "${REVISION_SNAPSHOT}" ; then
               PREFIX="snapshot"
+              SCAN_REPORT_RETENTION_DAYS="7"
           else
               PREFIX="test"
+              SCAN_REPORT_RETENTION_DAYS="30"
           fi
 
           # If we want to tag the repository, do so! Clobber any existing tags!
@@ -674,6 +677,8 @@ jobs:
               VULN_REPORT_PATTERN
               VULN_REPORT_HTML_SOURCE
               VULN_REPORT_SARIF_SOURCE
+
+              SCAN_REPORT_RETENTION_DAYS
           )
 
           for VAR in "${VARS[@]}" ; do
@@ -728,6 +733,7 @@ jobs:
         with:
           name: "compliance"
           path: ${{ env.COMP_REPORT_PATTERN }}
+          retention-days: ${{ env.SCAN_REPORT_RETENTION_DAYS }}
 
       - name: Upload the STIG compliance report to the GitHub Security tab
         if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
@@ -792,6 +798,7 @@ jobs:
         with:
           name: "vulnerabilities"
           path: ${{ env.VULN_REPORT_PATTERN }}
+          retention-days: ${{ env.SCAN_REPORT_RETENTION_DAYS }}
 
       - name: Upload the vulnerabilities report to the GitHub Security tab
         if: ${{ hashFiles(env.VULN_REPORT_SARIF_SOURCE) != '' }}
