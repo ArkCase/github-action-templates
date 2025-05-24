@@ -102,6 +102,11 @@ jobs:
   ECR-Publishing:
     runs-on: ubuntu-latest
     steps:
+      - name: Initialize the environment file for ${{ github.repository }}
+        run: |
+          # Start with a clean environment
+          : > .env
+
       - name: Validate the parameters
         env:
           PARAM_REVISION: ${{ inputs.revision }}
