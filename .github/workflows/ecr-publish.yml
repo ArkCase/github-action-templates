@@ -100,7 +100,7 @@ env:
 
 jobs:
   ECR-Publishing:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Initialize the environment file for ${{ github.repository }}
         run: |

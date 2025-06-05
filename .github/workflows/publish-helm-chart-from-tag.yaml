@@ -68,7 +68,7 @@ env:
 
 jobs:
   publish-helm-chart:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     steps:
       # This one needs to happen ALWAYS, b/c if tag validation
       # fails, the last job will remove the errant tag from the
