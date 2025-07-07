@@ -618,7 +618,7 @@ jobs:
           # (don't ask XD). We instead create out-of-band tags for the container
           # image. This is OK, b/c the "AUTHORITATIVE_TAG" is the most exact tag
           # that describes this specific build being executed right this second,
-          # and as such can be used as the tag's canonical name.
+          # and as such can be used as the image's canonical name.
           #
           # We do it like this to avoid having to modify the "docker push"
           # section, below.
