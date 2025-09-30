@@ -50,7 +50,7 @@ docker()
 
 (( ++I ))
 (
-    echo "BLOCK "${I}""
+    echo "BLOCK ${I}"
 
           if [ -n "${PARAM_REVISION}" ] ; then
               # Parse for vailidity ... we'll examine it more closely later
@@ -70,7 +70,7 @@ docker()
 
 (( ++I ))
 (
-    echo "BLOCK "${I}""
+    echo "BLOCK ${I}"
 
           # Start with a clean environment
           : > .env
@@ -89,7 +89,7 @@ docker()
 
 (( ++I ))
 (
-    echo "BLOCK "${I}""
+    echo "BLOCK ${I}"
 
           source .env
           cat .env
