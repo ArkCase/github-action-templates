@@ -89,7 +89,7 @@ env:
   ECR_AWS_ORG_ID: ${{ secrets.ECR_AWS_ORG_ID }}
   GH_TOKEN: ${{ github.token }}
 
-  SCANNER_IMAGE: "arkcase/security-scanner:20250930.01"
+  SCANNER_IMAGE: "arkcase/security-scanner:20250930.02"
   BIG_CONTAINER_SIZE: ${{ inputs.big-container-size }}
 
   # Enable/disable STIG Compliance Scans
@@ -99,7 +99,6 @@ env:
   # Enable/disable Vulnerability Scans
   SCAN_VULN: ${{ inputs.vulnerabilities-scan }}
   SCAN_VULN_REQUIRED: ${{ inputs.vulnerabilities-required }}
-  SCAN_VULN_RESULT_FORMAT: ${{ inputs.vulnerabilities-result-format }}
 
   DEVEL_KEEP_DAYS: 30
   SNAPSHOT_KEEP_DAYS: 30
@@ -672,8 +671,10 @@ jobs:
           COMP_REPORT_SARIF_SOURCE="compliance.sarif"
 
           VULN_REPORT_PATTERN="vulnerabilities.*"
+          VULN_REPORT_JSON_SOURCE="vulnerabilities.json"
           VULN_REPORT_HTML_SOURCE="vulnerabilities.html"
           VULN_REPORT_SARIF_SOURCE="vulnerabilities.sarif"
+          VULN_REPORT_SBOM_SOURCE="vulnerabilities.cdx"
 
           VARS=(
               AUTHORITATIVE_TAG
@@ -688,6 +689,8 @@ jobs:
               VULN_REPORT_PATTERN
               VULN_REPORT_HTML_SOURCE
               VULN_REPORT_SARIF_SOURCE
+              VULN_REPORT_SBOM_SOURCE
+              VULN_REPORT_JSON_SOURCE
 
               SCAN_REPORT_RETENTION_DAYS
           )
@@ -724,11 +727,10 @@ jobs:
               docker run 
                   --rm
                   --name compliance-scanner
-                  --env "RESULT_FORMAT=${SCAN_VULN_RESULT_FORMAT}"
                   --volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}"
                   --volume "${RESULTS_MOUNT}:/results"
-                  "${ECR_REGISTRY_PRIVATE}/${SCANNER_IMAGE}" \
-                      compliance "${AUTHORITATIVE_TAG}"
+                  "${ECR_REGISTRY_PRIVATE}/${SCANNER_IMAGE}"
+                  compliance "${AUTHORITATIVE_TAG}"
           )
           # Run the command!
           EXIT_CODE=0
@@ -792,8 +794,8 @@ jobs:
                   --name vulnerability-scanner
                   --volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}"
                   --volume "${RESULTS_MOUNT}:/results"
-                  "${ECR_REGISTRY_PRIVATE}/${SCANNER_IMAGE}" \
-                      vulnerabilities "${AUTHORITATIVE_TAG}"
+                  "${ECR_REGISTRY_PRIVATE}/${SCANNER_IMAGE}"
+                  vulnerabilities "${AUTHORITATIVE_TAG}"
           )
           # Run the command!
           EXIT_CODE=0
@@ -804,8 +806,8 @@ jobs:
               * ) exit ${EXIT_CODE} ;;
           esac
 
-      - name: Upload the vulnerabilities report to the GitHub artifacts tab
-        if: ${{ hashFiles(env.VULN_REPORT_SARIF_SOURCE) != '' }}
+      - name: Upload the vulnerabilities reports to the GitHub artifacts tab
+        if: ${{ hashFiles(env.VULN_REPORT_JSON_SOURCE) != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: "vulnerabilities"
@@ -821,7 +823,7 @@ jobs:
           category: vulnerabilities
 
       - name: Upload the vulnerabilities report to S3
-        if: ${{ hashFiles(env.VULN_REPORT_SARIF_SOURCE) != '' }}
+        if: ${{ hashFiles(env.VULN_REPORT_JSON_SOURCE) != '' }}
         env:
           REPORTS_BUCKET: ${{ inputs.reports-bucket }}
         run: |
