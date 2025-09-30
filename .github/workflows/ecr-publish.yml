@@ -664,28 +664,46 @@ jobs:
 
           REPORT_TARGET_PATH="${IMAGE_URI}/${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}/b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
 
-          COMP_REPORT_PATTERN="compliance.*"
-          COMP_REPORT_XML_SOURCE="compliance.xml"
-          COMP_REPORT_HDF_SOURCE="compliance.hdf"
-          COMP_REPORT_HTML_SOURCE="compliance.html"
-          COMP_REPORT_SARIF_SOURCE="compliance.sarif"
+          ARTIFACT_IDENTIFIER=""
+          case "${GITHUB_REF_NAME}" in
+              main ) ;;
 
-          VULN_REPORT_PATTERN="vulnerabilities.*"
-          VULN_REPORT_JSON_SOURCE="vulnerabilities.json"
-          VULN_REPORT_HTML_SOURCE="vulnerabilities.html"
-          VULN_REPORT_SARIF_SOURCE="vulnerabilities.sarif"
-          VULN_REPORT_SBOM_SOURCE="vulnerabilities.cdx"
+              develop ) ARTIFACT_IDENTIFIER=".develop" ;;
+
+              # We only do vulnerability scanning for main and develop
+              * ) SCAN_COMP="false" ; SCAN_VULN="false" ; BIG_CONTAINER="false" ;;
+          esac
+
+          # TODO: account for the branch name!
+          COMP_REPORT_BASE="compliance${ARTIFACT_IDENTIFIER}"
+          COMP_REPORT_PATTERN="${COMP_REPORT_BASE}.*"
+          COMP_REPORT_XML_SOURCE="${COMP_REPORT_BASE}.xml"
+          COMP_REPORT_HDF_SOURCE="${COMP_REPORT_BASE}.hdf"
+          COMP_REPORT_HTML_SOURCE="${COMP_REPORT_BASE}.html"
+          COMP_REPORT_SARIF_SOURCE="${COMP_REPORT_BASE}.sarif"
+
+          # TODO: account for the branch name!
+          VULN_REPORT_BASE="vulnerabilities${ARTIFACT_IDENTIFIER}"
+          VULN_REPORT_PATTERN="${VULN_REPORT_BASE}.*"
+          VULN_REPORT_JSON_SOURCE="${VULN_REPORT_BASE}.json"
+          VULN_REPORT_HTML_SOURCE="${VULN_REPORT_BASE}.html"
+          VULN_REPORT_SARIF_SOURCE="${VULN_REPORT_BASE}.sarif"
+          VULN_REPORT_SBOM_SOURCE="${VULN_REPORT_BASE}.cdx"
 
           VARS=(
               AUTHORITATIVE_TAG
               REPORT_TARGET_PATH
 
+              SCAN_COMP
+              COMP_REPORT_BASE
               COMP_REPORT_PATTERN
               COMP_REPORT_XML_SOURCE
               COMP_REPORT_HDF_SOURCE
               COMP_REPORT_HTML_SOURCE
               COMP_REPORT_SARIF_SOURCE
 
+              SCAN_VULN
+              VULN_REPORT_BASE
               VULN_REPORT_PATTERN
               VULN_REPORT_HTML_SOURCE
               VULN_REPORT_SARIF_SOURCE
@@ -693,6 +711,8 @@ jobs:
               VULN_REPORT_JSON_SOURCE
 
               SCAN_REPORT_RETENTION_DAYS
+
+              BIG_CONTAINER
           )
 
           for VAR in "${VARS[@]}" ; do
@@ -745,7 +765,7 @@ jobs:
         if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: "compliance"
+          name: ${{ env.COMP_REPORT_BASE }}
           path: ${{ env.COMP_REPORT_PATTERN }}
           retention-days: ${{ env.SCAN_REPORT_RETENTION_DAYS }}
 
@@ -810,7 +830,7 @@ jobs:
         if: ${{ hashFiles(env.VULN_REPORT_JSON_SOURCE) != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: "vulnerabilities"
+          name: ${{ env.VULN_REPORT_BASE }}
           path: ${{ env.VULN_REPORT_PATTERN }}
           retention-days: ${{ env.SCAN_REPORT_RETENTION_DAYS }}
 
