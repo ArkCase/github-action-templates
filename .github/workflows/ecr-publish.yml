@@ -84,7 +84,7 @@ env:
   ECR_AWS_ORG_ID: ${{ secrets.ECR_AWS_ORG_ID }}
   GH_TOKEN: ${{ github.token }}
 
-  SCANNER_IMAGE: "arkcase/security-scanner:20250217.01"
+  SCANNER_IMAGE: "arkcase/security-scanner:20250929.01"
   BIG_CONTAINER_SIZE: ${{ inputs.big-container-size }}
 
   # Enable/disable STIG Compliance Scans
