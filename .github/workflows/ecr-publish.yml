@@ -888,7 +888,12 @@ jobs:
           for BUILD in "${BUILDS[@]}" ; do
               [ "${AUTHORITATIVE_TAG}" == "${BUILD}" ] || EXTRA_TAGS+=( --tag "${BUILD}" )
           done
-          docker build --file "${DF}" --tag "${AUTHORITATIVE_TAG}" "${EXTRA_TAGS[@]}" .
+
+          # No build args needed here b/c we don't need'em
+          (
+              set -x
+              exec docker build --file "${DF}" --tag "${AUTHORITATIVE_TAG}" "${EXTRA_TAGS[@]}" .
+          ) || exit ${?}
 
           echo "TAGS_ADDED='true'" >> .env
           echo "TAGS_ADDED=true" >> "${GITHUB_ENV}"
