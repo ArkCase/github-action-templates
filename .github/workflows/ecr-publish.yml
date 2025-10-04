@@ -878,10 +878,10 @@ jobs:
           tar -czvf "${SECURITY_REPORTS_BUNDLE}" --files-from="${FILE_LIST}"
 
           echo "Reports bundle ready! Creating a backup tag ..."
-          BACKUP_TAG="backup.${AUTHORITATIVE_TAG}"
+          BACKUP_TAG="${AUTHORITATIVE_TAG}-bak"
           (
               set -x
-              exec docker tag "${AUTORITATIVE_TAG}" "${BACKUP_TAG}"
+              exec docker tag "${AUTHORITATIVE_TAG}" "${BACKUP_TAG}"
           ) || exit ${?}
 
           DF="Dockerfile.with-reports.${GITHUB_RUN_NUMBER}"
