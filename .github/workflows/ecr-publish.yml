@@ -631,7 +631,7 @@ jobs:
           echo "AUTHORITATIVE_TAG=${AUTHORITATIVE_TAG@Q}" >> .env
           (
               set -x
-              docker build "${BUILD_ARGS[@]}" -t "${AUTHORITATIVE_TAG}" .
+              exec docker build "${BUILD_ARGS[@]}" --tag "${AUTHORITATIVE_TAG}" .
           ) || exit ${?}
 
           # Once the build succeeds, we create the required tags as appropriate
@@ -866,6 +866,40 @@ jobs:
           # it won't be uploaded or tagged (eventually :D)
           git push --force --tags
 
+      - name: Rebuild adding the scan results
+        if: ${{ (hashFiles(env.VULN_REPORT_JSON_SOURCE) != '') || (hashFiles(env.COMP_REPORT_XML_SOURCE) != '') }}
+        run: |
+          source .env
+          cat .env
+
+          # Compute the list of reports to be added
+          SECURITY_REPORTS_BUNDLE="security-reports.tar.gz"
+          FILE_LIST="security-reports.list.${GITHUB_RUN_NUMBER}"
+          (
+              find . -mindepth 1 -maxdepth 1 -type f -name "${COMP_REPORT_PATTERN}"
+              find . -mindepth 1 -maxdepth 1 -type f -name "${VULN_REPORT_PATTERN}"
+          ) | sort | cut -c3- > "${FILE_LIST}"
+
+          tar -czvf "${SECURITY_REPORTS_BUNDLE}" --files-from="${FILE_LIST}"
+          BACKUP_TAG="${AUTHORITATIVE_TAG}-bak"
+          docker tag "${AUTORITATIVE_TAG}" "${BACKUP_TAG}"
+          DF="Dockerfile.with-reports.${GITHUB_RUN_NUMBER}"
+          cat <<EOF > "${DF}"
+          FROM "${AUTHORITATIVE_TAG}"
+          COPY --chown=root:root --chmod=0444 "${SECURITY_REPORTS_BUNDLE}" "/${SECURITY_REPORTS_BUNDLE}"
+          EOF
+
+          # This time we add all the tags up front, since this will no longer be
+          # scanned
+          EXTRA_TAGS=()
+          for BUILD in "${BUILDS[@]}" ; do
+              [ "${AUTHORITATIVE_TAG}" == "${BUILD}" ] || EXTRA_TAGS+=( --tag "${BUILD}" )
+          done
+          docker build --file "${DF}" --tag "${AUTHORITATIVE_TAG}" "${EXTRA_TAGS[@]}" .
+
+          echo "TAGS_ADDED='true'" >> .env
+          echo "TAGS_ADDED=true" >> "${GITHUB_ENV}"
+
       - name: Create Private ECR Repo
         run: |
           source .env
@@ -1044,6 +1078,9 @@ jobs:
         run: |
           source .env
           cat .env
+
+          # Easy way to bypass the tagging mechanics below if the tags are already there
+          [ -v TAGS_ADDED ] && AUTHORITATIVE_TAG=""
 
           # Iterate over the array of built artifacts, and push them
           for BUILD in "${BUILDS[@]}" ; do
