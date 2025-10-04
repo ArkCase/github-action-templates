@@ -877,8 +877,8 @@ jobs:
 
           tar -czvf "${SECURITY_REPORTS_BUNDLE}" --files-from="${FILE_LIST}"
 
-          echo "Reports bundle ready! Creating a backup tag ..."
           BACKUP_TAG="${AUTHORITATIVE_TAG}-bak"
+          echo "Reports bundle ready! Creating a backup tag (${BACKUP_TAG}) ..."
           (
               set -x
               exec docker tag "${AUTHORITATIVE_TAG}" "${BACKUP_TAG}"
