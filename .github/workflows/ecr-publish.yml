@@ -859,15 +859,6 @@ jobs:
           done < <(find . -mindepth 1 -maxdepth 1 -type f -name "${VULN_REPORT_PATTERN}" | sort | cut -c3-)
           [ ${COUNT} -eq 0 ] || echo "Uploaded ${COUNT} report(s)!"
 
-      - name: Push the new tags
-        run: |
-          source .env
-          cat .env
-
-          # We split this up b/c if this build doesn't pass the security scan,
-          # it won't be uploaded or tagged (eventually :D)
-          git push --force --tags
-
       - name: Rebuild adding the scan results
         if: ${{ (hashFiles(env.VULN_REPORT_JSON_SOURCE) != '') || (hashFiles(env.COMP_REPORT_XML_SOURCE) != '') }}
         run: |
@@ -901,6 +892,15 @@ jobs:
 
           echo "TAGS_ADDED='true'" >> .env
           echo "TAGS_ADDED=true" >> "${GITHUB_ENV}"
+
+      - name: Push the new tags
+        run: |
+          source .env
+          cat .env
+
+          # We split this up b/c if this build doesn't pass the security scan,
+          # it won't be uploaded or tagged (eventually :D)
+          git push --force --tags
 
       - name: Create Private ECR Repo
         run: |
