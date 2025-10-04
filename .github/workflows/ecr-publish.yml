@@ -747,6 +747,7 @@ jobs:
               docker run 
                   --rm
                   --name compliance-scanner
+                  --env RESULTS_NAME="${COMP_REPORT_BASE}"
                   --volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}"
                   --volume "${RESULTS_MOUNT}:/results"
                   "${ECR_REGISTRY_PRIVATE}/${SCANNER_IMAGE}"
@@ -812,6 +813,7 @@ jobs:
               docker run 
                   --rm
                   --name vulnerability-scanner
+                  --env RESULTS_NAME="${VULN_REPORT_BASE}"
                   --volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}"
                   --volume "${RESULTS_MOUNT}:/results"
                   "${ECR_REGISTRY_PRIVATE}/${SCANNER_IMAGE}"
