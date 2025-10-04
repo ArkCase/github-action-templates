@@ -1102,5 +1102,5 @@ jobs:
           for BUILD in "${BUILDS[@]}" ; do
               echo "Pushing [${BUILD}] ..."
               [ "${AUTHORITATIVE_TAG}" == "${BUILD}" ] || docker tag "${AUTHORITATIVE_TAG}" "${BUILD}"
-              docker push "${BUILD}"
+              ( set -x ; exec docker push "${BUILD}" ) || exit ${?}
           done
