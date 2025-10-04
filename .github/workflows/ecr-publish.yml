@@ -1095,12 +1095,12 @@ jobs:
           source .env
           cat .env
 
-          # Easy way to bypass the tagging mechanics below if the tags are already there
-          [ -v TAGS_ADDED ] && AUTHORITATIVE_TAG=""
-
           # Iterate over the array of built artifacts, and push them
           for BUILD in "${BUILDS[@]}" ; do
               echo "Pushing [${BUILD}] ..."
-              [ "${AUTHORITATIVE_TAG}" == "${BUILD}" ] || docker tag "${AUTHORITATIVE_TAG}" "${BUILD}"
+              if [ "${TAGS_ADDED:-false}" != "true" ] && [ "${AUTHORITATIVE_TAG}" != "${BUILD}" ] ; then
+                  echo -e "\tTagging [${AUTHORITATIVE_TAG}] as [${BUILD}] ..."
+                  ( set -x ; exec docker tag "${AUTHORITATIVE_TAG}" "${BUILD}" ) || exit ${?}
+              fi
               ( set -x ; exec docker push "${BUILD}" ) || exit ${?}
           done
