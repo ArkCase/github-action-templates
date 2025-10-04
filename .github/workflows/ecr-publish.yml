@@ -865,6 +865,8 @@ jobs:
           source .env
           cat .env
 
+          echo "Attaching scan results to ${AUTHORITATIVE_TAG}..."
+
           # Compute the list of reports to be added
           SECURITY_REPORTS_BUNDLE="security-reports.tar.gz"
           FILE_LIST="security-reports.list.${GITHUB_RUN_NUMBER}"
@@ -874,8 +876,14 @@ jobs:
           ) | sort | cut -c3- > "${FILE_LIST}"
 
           tar -czvf "${SECURITY_REPORTS_BUNDLE}" --files-from="${FILE_LIST}"
-          BACKUP_TAG="${AUTHORITATIVE_TAG}-bak"
-          docker tag "${AUTORITATIVE_TAG}" "${BACKUP_TAG}"
+
+          echo "Reports bundle ready! Creating a backup tag ..."
+          BACKUP_TAG="backup.${AUTHORITATIVE_TAG}"
+          (
+              set -x
+              exec docker tag "${AUTORITATIVE_TAG}" "${BACKUP_TAG}"
+          ) || exit ${?}
+
           DF="Dockerfile.with-reports.${GITHUB_RUN_NUMBER}"
           cat <<EOF > "${DF}"
           FROM "${AUTHORITATIVE_TAG}"
@@ -884,6 +892,7 @@ jobs:
 
           # This time we add all the tags up front, since this will no longer be
           # scanned
+          echo "Computing extra tags ..."
           EXTRA_TAGS=()
           for BUILD in "${BUILDS[@]}" ; do
               [ "${AUTHORITATIVE_TAG}" == "${BUILD}" ] || EXTRA_TAGS+=( --tag "${BUILD}" )
