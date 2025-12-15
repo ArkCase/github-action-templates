@@ -422,6 +422,11 @@ jobs:
               echo "PORTAL_SNAPSHOT=${PORTAL_SNAPSHOT@Q}"
           fi
 
+          export LEGACY="false"
+          [[ "${GITHUB_REF_NAME}" =~ -legacy$ ]] && LEGACY="true"
+          echo "export LEGACY=${LEGACY@Q}" >> .env
+          echo "LEGACY=${LEGACY@Q}"
+
           # We only push to public if this is a public repository,
           # AND this build is not a pre-release build
           export PUSH_TO_PUBLIC="false"
@@ -475,6 +480,9 @@ jobs:
           for VAR in "${!CURL_@}" "${!MVN_GET_@}" ; do
               BUILD_ARGS+=(--build-arg "${VAR}=${!VAR}")
           done
+
+          # Mark as legacy if needed
+          [ "${LEGACY}" == "true" ] && BUILD_ARGS+=(--label "LEGACY=${LEGACY}")
 
           # Final details for more complete information
           BUILD_ARGS+=(--label "GIT_REPOSITORY=${GITHUB_REPOSITORY}")
