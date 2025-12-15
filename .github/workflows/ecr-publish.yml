@@ -390,7 +390,7 @@ jobs:
           export PREFIX="devel-"
           # This makes it easier to add special branch handlers later on
           case "${GITHUB_REF}" in
-              "refs/heads/main" | "refs/tags/release"/* ) ENVIRONMENT="stable" ; PREFIX="" ;;
+              "refs/heads/main" | "refs/heads/legacy" | "refs/tags/release"/* ) ENVIRONMENT="stable" ; PREFIX="" ;;
           esac
           echo "export ENVIRONMENT=${ENVIRONMENT@Q}" >> .env
           echo "ENVIRONMENT=${ENVIRONMENT@Q}"
@@ -667,8 +667,7 @@ jobs:
           ARTIFACT_IDENTIFIER=""
           case "${GITHUB_REF_NAME}" in
               main ) ;;
-
-              develop ) ARTIFACT_IDENTIFIER=".develop" ;;
+              develop | legacy | develop-legacy ) ARTIFACT_IDENTIFYER=".${GITHUB_REF_NAME}" ;;
 
               # We only do vulnerability scanning for main and develop
               * ) SCAN_COMP="false" ; SCAN_VULN="false" ; BIG_CONTAINER="false" ;;
