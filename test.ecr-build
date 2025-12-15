@@ -7,7 +7,7 @@ export ECR_AWS_SECRET_ACCESS_KEY="Y2VpY29oemFQaWVjaDRvZzZhaXBvbzBlaXlvMXZl"
 export ECR_AWS_ACCOUNT_ID="123456789876"
 export ECR_AWS_ORG_ID="o-Woo8oirohw"
 export ECR_AWS_REGION="us-east-1"
-export ALF_QUAY_IO_USER="alfresco+customer-65187-armedia-llc"
+export ALF_QUAY_IO_USERNAME="alfresco+customer-65187-armedia-llc"
 export ALF_QUAY_IO_PASSWORD="WWM8JCE96P6X4H1K1M84SD2N4JCKVM47JRZ0U83VMTG86U9SZO87NYLLOKRZDTQN"
 export ECR_REGISTRY_PRIVATE="${ECR_AWS_ACCOUNT_ID}.private.repo.com"
 export ECR_REGISTRY_PUBLIC="public.repo.org"
@@ -25,12 +25,31 @@ export GITHUB_REF="refs/heads/${GITHUB_REF_NAME}"
 export GITHUB_REF_TYPE="branch"
 export GITHUB_SHA="243aec0cd59ddf092f3365ff7b617187fc924b86"
 
+export SCAN_COMP="true"
+export SCAN_COMP_REQUIRED="true"
+export SCAN_VULN="true"
+export SCAN_VULN_REQUIRED="true"
+
+export DEVEL_KEEP_DAYS="30"
+export SNAPSHOT_KEEP_DAYS="30"
+
+export SCANNER_IMAGE="arkcase/security-scanner:20251120.01"
+export BIG_CONTAINER_SIZE="2048"
+
 export PARAM_REVISION="2023.02.01-RC-03"
 [ ${#} -ge 1 ] && PARAM_REVISION="${1}"
-export PARAM_ARKCASE="2023.02.01-SNAPSHOT"
-[ ${#} -ge 2 ] && PARAM_ARKCASE="${2}"
+export PARAM_PORTAL="2023.02.01-RC-03"
+[ ${#} -ge 2 ] && PARAM_PORTAL="${2}"
+
+export PARAM_PUBLISH_MAJOR=""
+export PARAM_PUBLISH_MINOR=""
 
 I=0
+
+gh()
+{
+	echo "false"
+}
 
 git()
 {
@@ -52,6 +71,14 @@ docker()
 (
     echo "BLOCK ${I}"
 
+          # Start with a clean environment
+          : > .env
+) || exit ${?}
+
+(( ++I ))
+(
+    echo "BLOCK ${I}"
+
           if [ -n "${PARAM_REVISION}" ] ; then
               # Parse for vailidity ... we'll examine it more closely later
               if [[ ! "${PARAM_REVISION}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
@@ -59,13 +86,23 @@ docker()
                   exit 1
               fi
           fi
-          if [ -n "${PARAM_ARKCASE}" ] ; then
+
+          if [ -n "${PARAM_PORTAL}" ] ; then
               # Parse for vailidity ... we'll examine it more closely later
-              if [[ ! "${PARAM_ARKCASE}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
-                  echo "ArkCase version is not valid: [${PARAM_ARKCASE}]"
+              if [[ ! "${PARAM_PORTAL}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
+                  echo "The FOIA Portal version is not valid: [${PARAM_PORTAL}]"
                   exit 1
               fi
           fi
+
+          # We only care if we're going to run a scan
+          if [ "${SCAN_COMP}" == "true" ] || [ "${SCAN_VULN}" == "true" ] ; then
+              if [[ ! "${BIG_CONTAINER_SIZE}" =~ ^[1-9][0-9]*$ ]] ; then
+                  echo "The big-container-size parameter is not a valid number: [${BIG_CONTAINER_SIZE}]"
+                  exit 1
+              fi
+          fi
+
 ) || exit ${?}
 
 (( ++I ))
@@ -82,8 +119,8 @@ docker()
           echo "export PARAM_REVISION=${PARAM_REVISION@Q}" >> .env
           echo "PARAM_REVISION=${PARAM_REVISION@Q}"
 
-          echo "export PARAM_ARKCASE=${PARAM_ARKCASE@Q}" >> .env
-          echo "PARAM_ARKCASE=${PARAM_ARKCASE@Q}"
+          echo "export PARAM_PORTAL=${PARAM_PORTAL@Q}" >> .env
+          echo "PARAM_PORTAL=${PARAM_PORTAL@Q}"
 
 ) || exit ${?}
 
@@ -102,6 +139,12 @@ docker()
               [ -v ALF_QUAY_IO_PASSWORD ] && echo -e "\tPASSWORD: [$(echo -n "${ALF_QUAY_IO_PASSWORD}" | sha256sum | awk '{ print $1 }')]"
               echo "The quay.io credentials were insufficient. Will not authenticate."
           fi
+
+) || exit ${?}
+
+(( ++I ))
+(
+    echo "BLOCK "${I}""
 
 ) || exit ${?}
 
@@ -147,8 +190,10 @@ docker()
 
           # Make sure it's defined if it isn't already
           REVISION="${PARAM_REVISION}"
-          ARKCASE_VER="${PARAM_ARKCASE}"
-          if [ -z "${REVISION}" ] || [ -z "${ARKCASE_VER}" ] ; then
+          PORTAL_VER="${PARAM_PORTAL}"
+          PUBLISH_MAJOR="${PARAM_PUBLISH_MAJOR}"
+          PUBLISH_MINOR="${PARAM_PUBLISH_MINOR}"
+          if [ -z "${REVISION}" ] || [ -z "${PORTAL_VER}" ] ; then
               # Parse out the tag, handle the case when it's not there
               readarray -t NEW_VERSIONS < <(
                   set -eo pipefail
@@ -178,10 +223,10 @@ docker()
                           sed -e "s;^\s*ARG\s;export ${PREFIX};g"
                   )
 
-                  for R in "VER" "ARKCASE_VER" ; do
+                  for R in "VER" "PORTAL_VER" "PUBLISH_MAJOR" "PUBLISH_MINOR" ; do
                       [ -z "${PREFIX}" ] || R="${PREFIX}${R}"
-                      # This checks to see if the candidate is defined, and if it has a non-blank
-                      # value. If both are met, then its value is output, and the loop is broken
+                      # This checks for each variable and outputs its
+                      # value if present, or an empty string if absent
                       [ -v "${R}" ] && echo "${!R}" || echo ""
                   done
                   exit 0
@@ -202,12 +247,23 @@ docker()
                   REVISION="${NEW_VERSIONS[0]}"
               fi
 
-              # We only override the ArkCase version if it wasn't provided as a parameter
-              [ -z "${ARKCASE_VER}" ] && ARKCASE_VER="${NEW_VERSIONS[1]}"
+              # We only override the FOIA Portal version if it wasn't provided as a parameter
+              [ -z "${PORTAL_VER}" ] && PORTAL_VER="${NEW_VERSIONS[1]}"
+
+              # These two will allow us to produce tags using only the major version
+              # of the container, or the major-minor combo. This in turn allows
+              # references to the container based on this, which allows us to update
+              # software versions without requiring everyone to keep up perfectly
+              [ -z "${PUBLISH_MAJOR}" ] && PUBLISH_MAJOR="${NEW_VERSIONS[2]:-false}"
+              [ -z "${PUBLISH_MINOR}" ] && PUBLISH_MINOR="${NEW_VERSIONS[3]:-false}"
 
               echo "Computed REVISION=${REVISION}"
-              echo "Computed ARKCASE_VER=${ARKCASE_VER}"
+              echo "Computed PORTAL_VER=${PORTAL_VER}"
+              echo "Computed PUBLISH_MAJOR=${PUBLISH_MAJOR}"
+              echo "Computed PUBLISH_MINOR=${PUBLISH_MINOR}"
           fi
+          [ "${PUBLISH_MAJOR,,}" == "true" ] && PUBLISH_MAJOR="true" || PUBLISH_MAJOR="false"
+          [ "${PUBLISH_MINOR,,}" == "true" ] && PUBLISH_MINOR="true" || PUBLISH_MINOR="false"
 
           # Parse for vailidity ... we'll examine it more closely later
           #
@@ -238,24 +294,24 @@ docker()
               fi
           fi
 
-          # Do the same validation, but for the ArkCase version
-          if [ -n "${ARKCASE_VER}" ] ; then
-              if [[ ! "${ARKCASE_VER}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
-                  echo "ArkCase version is not valid: [${ARKCASE_VER}]"
+          # Do the same validation, but for the FOIA Portal version
+          if [ -n "${PORTAL_VER}" ] ; then
+              if [[ ! "${PORTAL_VER}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
+                  echo "The FOIA Portal version is not valid: [${PORTAL_VER}]"
                   exit 1
               fi
 
-              ACM_BASE_NUMBER="${BASH_REMATCH[1]}"
-              ACM_PRERELEASE="${BASH_REMATCH[5]}"
-              ACM_METADATA="${BASH_REMATCH[8]}"
+              PORTAL_BASE_NUMBER="${BASH_REMATCH[1]}"
+              PORTAL_PRERELEASE="${BASH_REMATCH[5]}"
+              PORTAL_METADATA="${BASH_REMATCH[8]}"
 
               # If the pre-release info is a "SNAPSHOT", make sure it's used properly
-              ACM_SNAPSHOT="false"
-              if [[ "${ACM_PRERELEASE}" =~ SNAPSHOT ]] ; then
-                  if [[ "${ACM_PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT ]] ; then
-                      ACM_SNAPSHOT="true"
+              PORTAL_SNAPSHOT="false"
+              if [[ "${PORTAL_PRERELEASE}" =~ SNAPSHOT ]] ; then
+                  if [[ "${PORTAL_PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT ]] ; then
+                      PORTAL_SNAPSHOT="true"
                   else
-                      echo "Illegal use of the word 'SNAPSHOT' as [${PRERELASE}] - must be the last word: [${ARKCASE_VER}]"
+                      echo "Illegal use of the word 'SNAPSHOT' as [${PRERELASE}] - must be the last word: [${PORTAL_VER}]"
                       exit 1
                   fi
               fi
@@ -273,17 +329,17 @@ docker()
               fi
               echo "REVISION_QUALITY=${REVISION_QUALITY}"
 
-              if "${ACM_SNAPSHOT}" ; then
-                  ACM_QUALITY="0"
-              elif [ -n "${ACM_PRERELEASE}" ] ; then
-                  ACM_QUALITY="1"
+              if "${PORTAL_SNAPSHOT}" ; then
+                  PORTAL_QUALITY="0"
+              elif [ -n "${PORTAL_PRERELEASE}" ] ; then
+                  PORTAL_QUALITY="1"
               else
-                  ACM_QUALITY="2"
+                  PORTAL_QUALITY="2"
               fi
-              echo "ACM_QUALITY=${ACM_QUALITY}"
+              echo "PORTAL_QUALITY=${PORTAL_QUALITY}"
 
-              if [ ${REVISION_QUALITY} -gt ${ACM_QUALITY} ] ; then
-                  echo "The target revision quality (${REVISION_QUALITY}) is higher than the base ArkCase quality (${ACM_QUALITY}), and this is not allowed"
+              if [ ${REVISION_QUALITY} -gt ${PORTAL_QUALITY} ] ; then
+                  echo "The target revision quality (${REVISION_QUALITY}) is higher than the Portal component quality (${PORTAL_QUALITY}), and this is not allowed"
                   exit 1
               fi
           fi
@@ -293,7 +349,7 @@ docker()
           export PREFIX="devel-"
           # This makes it easier to add special branch handlers later on
           case "${GITHUB_REF}" in
-              "refs/heads/main" ) ENVIRONMENT="stable" ; PREFIX="" ;;
+              "refs/heads/main" | "refs/heads/legacy" | "refs/tags/release"/* ) ENVIRONMENT="stable" ; PREFIX="" ;;
           esac
           echo "export ENVIRONMENT=${ENVIRONMENT@Q}" >> .env
           echo "ENVIRONMENT=${ENVIRONMENT@Q}"
@@ -312,18 +368,28 @@ docker()
           echo "REVISION_METADATA=${METADATA@Q}"
           echo "REVISION_SNAPSHOT=${REVISION_SNAPSHOT@Q}"
 
-          if [ -n "${ARKCASE_VER}" ] ; then
-              echo "export ARKCASE_VER=${ARKCASE_VER@Q}" >> .env
-              echo "export ACM_BASE_NUMBER=${ACM_BASE_NUMBER@Q}" >> .env
-              echo "export ACM_PRERELEASE=${ACM_PRERELEASE@Q}" >> .env
-              echo "export ACM_METADATA=${ACM_METADATA@Q}" >> .env
-              echo "export ACM_SNAPSHOT=${ACM_SNAPSHOT@Q}" >> .env
-              echo "ARKCASE_VER=${ARKCASE_VER@Q}"
-              echo "ACM_BASE_NUMBER=${ACM_BASE_NUMBER@Q}"
-              echo "ACM_PRERELEASE=${ACM_PRERELEASE@Q}"
-              echo "ACM_METADATA=${ACM_METADATA@Q}"
-              echo "ACM_SNAPSHOT=${ACM_SNAPSHOT@Q}"
+          if [ -n "${PORTAL_VER}" ] ; then
+              echo "export PORTAL_VER=${PORTAL_VER@Q}" >> .env
+              echo "export PORTAL_BASE_NUMBER=${PORTAL_BASE_NUMBER@Q}" >> .env
+              echo "export PORTAL_PRERELEASE=${PORTAL_PRERELEASE@Q}" >> .env
+              echo "export PORTAL_METADATA=${PORTAL_METADATA@Q}" >> .env
+              echo "export PORTAL_SNAPSHOT=${PORTAL_SNAPSHOT@Q}" >> .env
+              echo "PORTAL_VER=${PORTAL_VER@Q}"
+              echo "PORTAL_BASE_NUMBER=${PORTAL_BASE_NUMBER@Q}"
+              echo "PORTAL_PRERELEASE=${PORTAL_PRERELEASE@Q}"
+              echo "PORTAL_METADATA=${PORTAL_METADATA@Q}"
+              echo "PORTAL_SNAPSHOT=${PORTAL_SNAPSHOT@Q}"
           fi
+
+          echo "export PUBLISH_MAJOR=${PUBLISH_MAJOR@Q}" >> .env
+          echo "PUBLISH_MAJOR=${PUBLISH_MAJOR@Q}"
+          echo "export PUBLISH_MINOR=${PUBLISH_MINOR@Q}" >> .env
+          echo "PUBLISH_MINOR=${PUBLISH_MINOR@Q}"
+
+          export LEGACY="false"
+          [[ "${GITHUB_REF_NAME}" =~ -legacy$ ]] && LEGACY="true"
+          echo "export LEGACY=${LEGACY@Q}" >> .env
+          echo "LEGACY=${LEGACY@Q}"
 
           # We only push to public if this is a public repository,
           # AND this build is not a pre-release build
@@ -331,6 +397,7 @@ docker()
           [ "${ENVIRONMENT}" == "stable" ] && [ "${VISIBILITY}" == "public" ] && [ -z "${PRERELEASE}" ] && PUSH_TO_PUBLIC="true"
           echo "export PUSH_TO_PUBLIC=${PUSH_TO_PUBLIC@Q}" >> .env
           echo "PUSH_TO_PUBLIC=${PUSH_TO_PUBLIC@Q}"
+
 
 ) || exit ${?}
 
@@ -346,11 +413,12 @@ docker()
 
           # Always use the base version for this ...
           BUILD_ARGS+=(--build-arg "VER=${REVISION}")
-          [ -n "${ARKCASE_VER:-}" ] && BUILD_ARGS+=(--build-arg "ARKCASE_VER=${ARKCASE_VER}")
+          [ -n "${PORTAL_VER:-}" ] && BUILD_ARGS+=(--build-arg "PORTAL_VER=${PORTAL_VER}")
 
           # Select the base registries
           BUILD_ARGS+=(--build-arg "PRIVATE_REGISTRY=${ECR_REGISTRY_PRIVATE}")
           BUILD_ARGS+=(--build-arg "PUBLIC_REGISTRY=${ECR_REGISTRY_PUBLIC}")
+          BUILD_ARGS+=(--build-arg "BASE_VER_PFX=${REVISION_PREFIX}")
 
           # Select which one is the BASE registry, based on whether this
           # container is to be pushed to public or not
@@ -367,6 +435,9 @@ docker()
           for VAR in "${!CURL_@}" "${!MVN_GET_@}" ; do
               BUILD_ARGS+=(--build-arg "${VAR}=${!VAR}")
           done
+
+          # Mark as legacy if needed
+          [ "${LEGACY}" == "true" ] && BUILD_ARGS+=(--label "LEGACY=${LEGACY}")
 
           # Final details for more complete information
           BUILD_ARGS+=(--label "GIT_REPOSITORY=${GITHUB_REPOSITORY}")
@@ -405,6 +476,12 @@ docker()
           # If we have a pre-release tag, pre-pend a dash
           [ -n "${REVISION_PRERELEASE}" ] && REVISION_PRERELEASE="-${REVISION_PRERELEASE}"
 
+          MAJOR_REVISION=""
+          MINOR_REVISION=""
+          VERSION_PARTS=( ${REVISION_BASE_NUMBER//./ } )
+          [ "${PUBLISH_MAJOR}" == "true" ] && [ ${#VERSION_PARTS[@]} -ge 2 ] && MAJOR_REVISION="${VERSION_PARTS[0]}"
+          [ "${PUBLISH_MINOR}" == "true" ] && [ ${#VERSION_PARTS[@]} -ge 3 ] && MINOR_REVISION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}"
+
           # This will house all the different revisions by which this
           # artifact will be known
           REVISIONS=()
@@ -413,17 +490,25 @@ docker()
           # separator here b/c the plus sign is not permitted in Docker tags
 
           # The first metadata must be appended with a leading underscore
-          REVISIONS+=("${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}${REVISION_METADATA:+_}${REVISION_METADATA}")
+          REVISION_SUFFIX="${REVISION_PRERELEASE}${REVISION_METADATA:+_}${REVISION_METADATA}"
+          REVISIONS+=("${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_SUFFIX}")
+          [ -n "${MAJOR_REVISION}" ] && REVISIONS+=("${REVISION_PREFIX}${MAJOR_REVISION}${REVISION_SUFFIX}")
+          [ -n "${MINOR_REVISION}" ] && REVISIONS+=("${REVISION_PREFIX}${MINOR_REVISION}${REVISION_SUFFIX}")
 
-          # For the other builds, if there's any metadata, it will need a dash up front
+          # For the other builds, if there's any metadata, it will need a dash up front from here on
           [ -n "${REVISION_METADATA}" ] && REVISION_METADATA="-${REVISION_METADATA}"
 
           # This is an intermediate revision with a little more build metadata
-          REVISIONS+=("${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}_b${GITHUB_RUN_NUMBER}${REVISION_METADATA}")
-
+          REVISION_SUFFIX="${REVISION_PRERELEASE}_b${GITHUB_RUN_NUMBER}${REVISION_METADATA}"
+          REVISIONS+=("${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_SUFFIX}")
+          [ -n "${MAJOR_REVISION}" ] && REVISIONS+=("${REVISION_PREFIX}${MAJOR_REVISION}${REVISION_SUFFIX}")
+          [ -n "${MINOR_REVISION}" ] && REVISIONS+=("${REVISION_PREFIX}${MINOR_REVISION}${REVISION_SUFFIX}")
           # This is the most exact revision, which will be used for "latest" computation
-          LATEST_REVISION="${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}_b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
-          REVISIONS+=("${LATEST_REVISION}")
+          REVISION_SUFFIX="${REVISION_PRERELEASE}_b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
+          EXACT_REVISION="${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_SUFFIX}"
+          REVISIONS+=("${EXACT_REVISION}")
+          [ -n "${MAJOR_REVISION}" ] && REVISIONS+=("${REVISION_PREFIX}${MAJOR_REVISION}${REVISION_SUFFIX}")
+          [ -n "${MINOR_REVISION}" ] && REVISIONS+=("${REVISION_PREFIX}${MINOR_REVISION}${REVISION_SUFFIX}")
 
           TARGETS=()
           TARGETS+=("${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}")
@@ -437,7 +522,7 @@ docker()
               for R in "${REVISIONS[@]}" ; do
                   BUILD="${T}:${R}"
                   echo "BUILDS+=(${BUILD@Q})" >> .env
-                  TAGS+=(--tag "${BUILD}")
+                  TAGS+=("${BUILD}")
               done
           done
 
@@ -469,7 +554,7 @@ docker()
                       # alongside all other revisions. This way the post-processing
                       # sort+grep+head will yield the revision that should carry the
                       # "latest" moniker
-                      echo "${LATEST_REVISION}"
+                      echo "${EXACT_REVISION}"
                       aws ecr describe-images --repository-name "${IMAGE_URI}" | \
                           jq -r "${JQ_FIND_IMAGE_TAGS}"
                   ) | \
@@ -477,10 +562,10 @@ docker()
                   sort --reverse --version-sort --unique | \
                   head -1
               )"
-              if [ "${LATEST_PRV}" == "${LATEST_REVISION}" ] ; then
+              if [ "${LATEST_PRV}" == "${EXACT_REVISION}" ] ; then
                   BUILD="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${LATEST}"
                   echo "BUILDS+=(${BUILD@Q})" >> .env
-                  TAGS+=(--tag "${BUILD}")
+                  TAGS+=("${BUILD}")
                   "${LATEST_ADDED}" || REVISIONS+=("${LATEST}")
                   LATEST_ADDED="true"
               fi
@@ -493,7 +578,7 @@ docker()
                           # alongside all other revisions. This way the post-processing
                           # sort+grep+head will yield the revision that should carry the
                           # "latest" moniker
-                          echo "${LATEST_REVISION}"
+                          echo "${EXACT_REVISION}"
                           aws ecr-public describe-images --repository-name "${IMAGE_NAME}" | \
                               jq -r "${JQ_FIND_IMAGE_TAGS}"
                       ) | \
@@ -501,34 +586,313 @@ docker()
                       sort --reverse --version-sort --unique | \
                       head -1
                   )"
-                  if [ "${LATEST_PUB}" == "${LATEST_REVISION}" ] ; then
+                  if [ "${LATEST_PUB}" == "${EXACT_REVISION}" ] ; then
                       BUILD="${ECR_REGISTRY_PUBLIC}/${IMAGE_URI}:${LATEST}"
                       echo "BUILDS+=(${BUILD@Q})" >> .env
-                      TAGS+=(--tag "${BUILD}")
+                      TAGS+=("${BUILD}")
                       "${LATEST_ADDED}" || REVISIONS+=("${LATEST}")
                       LATEST_ADDED="true"
                   fi
               fi
           fi
 
-          set -x
-          docker build "${BUILD_ARGS[@]}" "${TAGS[@]}" .
-          set +x
+          # We only build to a single tag b/c the security scanner pukes otherwise
+          # (don't ask XD). We instead create out-of-band tags for the container
+          # image. This is OK, b/c the "AUTHORITATIVE_TAG" is the most exact tag
+          # that describes this specific build being executed right this second,
+          # and as such can be used as the image's canonical name.
+          #
+          # We do it like this to avoid having to modify the "docker push"
+          # section, below.
+          AUTHORITATIVE_TAG="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${EXACT_REVISION}"
+          echo "AUTHORITATIVE_TAG=${AUTHORITATIVE_TAG@Q}" >> .env
+          (
+              set -x
+              exec docker build "${BUILD_ARGS[@]}" --tag "${AUTHORITATIVE_TAG}" .
+          ) || exit ${?}
 
           # Once the build succeeds, we create the required tags as appropriate
           if [ -z "${REVISION_PRERELEASE}" ] ; then
+              SCAN_REPORT_RETENTION_DAYS="90"
               PREFIX="release"
           elif "${REVISION_SNAPSHOT}" ; then
               PREFIX="snapshot"
+              SCAN_REPORT_RETENTION_DAYS="7"
           else
               PREFIX="test"
+              SCAN_REPORT_RETENTION_DAYS="30"
           fi
-
           # If we want to tag the repository, do so! Clobber any existing tags!
+          echo "Creating Git tags for: ${REVISIONS[@]}"
           for R in "${REVISIONS[@]}" ; do
               # Tags for GIT must be the *real* revision, with "+" instead of "_"
               git tag --force "${PREFIX}/${R//_/+}"
           done
+
+          # We only care about container size if we're running security scanning
+          BIG_CONTAINER="false"
+          if [ "${SCAN_COMP}" == "true" ] || [ "${SCAN_VULN}" == "true" ] ; then
+              # Identify the image size (in MB), and check to see if it qualifies as a "Big Container" (rounded up)
+              SIZE="$(docker image inspect "${AUTHORITATIVE_TAG}" | jq -r "([.[].Size] | add) / (1024 * 1024) | ceil")"
+              [ ${SIZE} -ge ${BIG_CONTAINER_SIZE} ] && BIG_CONTAINER="true"
+          fi
+          echo "BIG_CONTAINER=${BIG_CONTAINER}" >> "${GITHUB_ENV}"
+
+          REPORT_TARGET_PATH="${IMAGE_URI}/${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}/b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
+
+          ARTIFACT_IDENTIFIER=""
+          case "${GITHUB_REF_NAME}" in
+              main ) ;;
+              develop | legacy | develop-legacy ) ARTIFACT_IDENTIFYER=".${GITHUB_REF_NAME}" ;;
+
+              # We only do vulnerability scanning for main and develop
+              * ) SCAN_COMP="false" ; SCAN_VULN="false" ; BIG_CONTAINER="false" ;;
+          esac
+
+          # TODO: account for the branch name!
+          COMP_REPORT_BASE="compliance${ARTIFACT_IDENTIFIER}"
+          COMP_REPORT_PATTERN="${COMP_REPORT_BASE}.*"
+          COMP_REPORT_XML_SOURCE="${COMP_REPORT_BASE}.xml"
+          COMP_REPORT_HDF_SOURCE="${COMP_REPORT_BASE}.hdf"
+          COMP_REPORT_HTML_SOURCE="${COMP_REPORT_BASE}.html"
+          COMP_REPORT_SARIF_SOURCE="${COMP_REPORT_BASE}.sarif"
+
+          # TODO: account for the branch name!
+          VULN_REPORT_BASE="vulnerabilities${ARTIFACT_IDENTIFIER}"
+          VULN_REPORT_PATTERN="${VULN_REPORT_BASE}.*"
+          VULN_REPORT_JSON_SOURCE="${VULN_REPORT_BASE}.json"
+          VULN_REPORT_HTML_SOURCE="${VULN_REPORT_BASE}.html"
+          VULN_REPORT_SARIF_SOURCE="${VULN_REPORT_BASE}.sarif"
+          VULN_REPORT_SBOM_SOURCE="${VULN_REPORT_BASE}.cdx"
+
+          VARS=(
+              AUTHORITATIVE_TAG
+              REPORT_TARGET_PATH
+
+              SCAN_COMP
+              COMP_REPORT_BASE
+              COMP_REPORT_PATTERN
+              COMP_REPORT_XML_SOURCE
+              COMP_REPORT_HDF_SOURCE
+              COMP_REPORT_HTML_SOURCE
+              COMP_REPORT_SARIF_SOURCE
+
+              SCAN_VULN
+              VULN_REPORT_BASE
+              VULN_REPORT_PATTERN
+              VULN_REPORT_HTML_SOURCE
+              VULN_REPORT_SARIF_SOURCE
+              VULN_REPORT_SBOM_SOURCE
+              VULN_REPORT_JSON_SOURCE
+
+              SCAN_REPORT_RETENTION_DAYS
+
+              BIG_CONTAINER
+          )
+
+          for VAR in "${VARS[@]}" ; do
+              VAL="${!VAR}"
+              echo "${VAR}=${VAL@Q}" >> .env
+              echo "${VAR}=${VAL}" >> "${GITHUB_ENV}"
+          done
+
+) || exit ${?}
+
+(( ++I ))
+(
+    echo "BLOCK "${I}""
+
+          source .env
+          cat .env
+
+          set -euo pipefail
+
+          echo "Launching the Compliance Scan for ${AUTHORITATIVE_TAG}..."
+
+          RESULTS_MOUNT="$(readlink -f ".")"
+          DOCKER_SOCKET="/var/run/docker.sock"
+          CMD=(
+              docker run
+                  --rm
+                  --name compliance-scanner
+                  --env RESULTS_NAME="${COMP_REPORT_BASE}"
+                  --volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}"
+                  --volume "${RESULTS_MOUNT}:/results"
+                  "${ECR_REGISTRY_PRIVATE}/${SCANNER_IMAGE}"
+                  compliance "${AUTHORITATIVE_TAG}"
+          )
+          # Run the command!
+          EXIT_CODE=0
+          echo "Launching: ${CMD[@]@Q}"
+          "${CMD[@]}" || EXIT_CODE=${?}
+          case "${EXIT_CODE}" in
+              0 | 2 ) exit 0 ;;
+              * ) exit ${EXIT_CODE} ;;
+          esac
+
+
+) || exit ${?}
+
+(( ++I ))
+(
+    echo "BLOCK "${I}""
+
+          source .env
+          cat .env
+
+          set -euo pipefail
+
+          echo "Launching the Compliance Scan for ${AUTHORITATIVE_TAG}..."
+
+          RESULTS_MOUNT="$(readlink -f ".")"
+          DOCKER_SOCKET="/var/run/docker.sock"
+          CMD=(
+              docker run
+                  --rm
+                  --name compliance-scanner
+                  --env RESULTS_NAME="${COMP_REPORT_BASE}"
+                  --volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}"
+                  --volume "${RESULTS_MOUNT}:/results"
+                  "${ECR_REGISTRY_PRIVATE}/${SCANNER_IMAGE}"
+                  compliance "${AUTHORITATIVE_TAG}"
+          )
+          # Run the command!
+          EXIT_CODE=0
+          echo "Launching: ${CMD[@]@Q}"
+          "${CMD[@]}" || EXIT_CODE=${?}
+          case "${EXIT_CODE}" in
+              0 | 2 ) exit 0 ;;
+              * ) exit ${EXIT_CODE} ;;
+          esac
+
+) || exit ${?}
+
+(( ++I ))
+(
+    echo "BLOCK "${I}""
+
+          source .env
+          cat .env
+          COUNT=0
+          while read SRC ; do
+              echo "Uploading [${SRC}] to [s3://${REPORTS_BUCKET}/${REPORT_TARGET_PATH}]..."
+              aws s3 cp "${SRC}" "s3://${REPORTS_BUCKET}/${REPORT_TARGET_PATH}/${SRC}"
+              (( ++COUNT ))
+          done < <(find . -mindepth 1 -maxdepth 1 -type f -name "${COMP_REPORT_PATTERN}" | sort | cut -c3-)
+          [ ${COUNT} -eq 0 ] || echo "Uploaded ${COUNT} report(s)!"
+
+) || exit ${?}
+
+(( ++I ))
+(
+    echo "BLOCK "${I}""
+
+          source .env
+          cat .env
+
+          set -euo pipefail
+
+          echo "Launching the Vulnerability Scan for ${AUTHORITATIVE_TAG}..."
+
+          RESULTS_MOUNT="$(readlink -f ".")"
+          DOCKER_SOCKET="/var/run/docker.sock"
+          CMD=(
+              docker run
+                  --rm
+                  --name vulnerability-scanner
+                  --env RESULTS_NAME="${VULN_REPORT_BASE}"
+                  --volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}"
+                  --volume "${RESULTS_MOUNT}:/results"
+                  "${ECR_REGISTRY_PRIVATE}/${SCANNER_IMAGE}"
+                  vulnerabilities "${AUTHORITATIVE_TAG}"
+          )
+          # Run the command!
+          EXIT_CODE=0
+          echo "Launching: ${CMD[@]@Q}"
+          "${CMD[@]}" || EXIT_CODE=${?}
+          case "${EXIT_CODE}" in
+              0 | 2 ) exit 0 ;;
+              * ) exit ${EXIT_CODE} ;;
+          esac
+
+) || exit ${?}
+
+(( ++I ))
+(
+    echo "BLOCK "${I}""
+
+          source .env
+          cat .env
+          COUNT=0
+          while read SRC ; do
+              echo "Uploading [${SRC}] to [s3://${REPORTS_BUCKET}/${REPORT_TARGET_PATH}]..."
+              aws s3 cp "${SRC}" "s3://${REPORTS_BUCKET}/${REPORT_TARGET_PATH}/${SRC}"
+              (( ++COUNT ))
+          done < <(find . -mindepth 1 -maxdepth 1 -type f -name "${VULN_REPORT_PATTERN}" | sort | cut -c3-)
+          [ ${COUNT} -eq 0 ] || echo "Uploaded ${COUNT} report(s)!"
+
+) || exit ${?}
+
+(( ++I ))
+(
+    echo "BLOCK "${I}""
+
+          source .env
+          cat .env
+
+          echo "Attaching scan results to ${AUTHORITATIVE_TAG}..."
+
+          # Compute the list of reports to be added
+          SECURITY_REPORTS_BUNDLE="security-reports.tar.gz"
+          FILE_LIST="security-reports.list.${GITHUB_RUN_NUMBER}"
+          (
+              find . -mindepth 1 -maxdepth 1 -type f -name "${COMP_REPORT_PATTERN}"
+              find . -mindepth 1 -maxdepth 1 -type f -name "${VULN_REPORT_PATTERN}"
+          ) | sort | cut -c3- > "${FILE_LIST}"
+
+          tar -czvf "${SECURITY_REPORTS_BUNDLE}" --files-from="${FILE_LIST}"
+
+          BACKUP_TAG="${AUTHORITATIVE_TAG}-bak"
+          echo "Reports bundle ready! Creating a backup tag (${BACKUP_TAG}) ..."
+          (
+              set -x
+              exec docker tag "${AUTHORITATIVE_TAG}" "${BACKUP_TAG}"
+          ) || exit ${?}
+
+          DF="Dockerfile.with-reports.${GITHUB_RUN_NUMBER}"
+          cat <<EOF > "${DF}"
+          FROM "${AUTHORITATIVE_TAG}"
+          COPY --chown=root:root --chmod=0444 "${SECURITY_REPORTS_BUNDLE}" "/${SECURITY_REPORTS_BUNDLE}"
+          EOF
+
+          # This time we add all the tags up front, since this will no longer be
+          # scanned
+          echo "Computing extra tags ..."
+          EXTRA_TAGS=()
+          for BUILD in "${BUILDS[@]}" ; do
+              [ "${AUTHORITATIVE_TAG}" == "${BUILD}" ] || EXTRA_TAGS+=( --tag "${BUILD}" )
+          done
+
+          # No build args needed here b/c we don't need'em
+          (
+              set -x
+              exec docker build --file "${DF}" --tag "${AUTHORITATIVE_TAG}" "${EXTRA_TAGS[@]}" .
+          ) || exit ${?}
+
+          echo "TAGS_ADDED='true'" >> .env
+          echo "TAGS_ADDED=true" >> "${GITHUB_ENV}"
+
+) || exit ${?}
+
+(( ++I ))
+(
+    echo "BLOCK "${I}""
+
+          source .env
+          cat .env
+
+          # We split this up b/c if this build doesn't pass the security scan,
+          # it won't be uploaded or tagged (eventually :D)
           git push --force --tags
 
 ) || exit ${?}
@@ -575,6 +939,139 @@ docker()
           source .env
           cat .env
 
+          cat << POL_STATEMENT > ecr_read_policy.json
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "org-ecr-read",
+                "Effect": "Allow",
+                "Principal": "*",
+                "Action": [
+                  "ecr:BatchCheckLayerAvailability",
+                  "ecr:BatchGetImage",
+                  "ecr:DescribeImageScanFindings",
+                  "ecr:DescribeImages",
+                  "ecr:DescribeRepositories",
+                  "ecr:GetDownloadUrlForLayer",
+                  "ecr:GetLifecyclePolicy",
+                  "ecr:GetLifecyclePolicyPreview",
+                  "ecr:GetRepositoryPolicy",
+                  "ecr:ListImages",
+                  "ecr:ListTagsForResource"
+                ],
+                "Condition": {
+                  "ForAnyValue:StringEquals": {
+                    "aws:PrincipalOrgID": [
+                      "${ECR_AWS_ORG_ID}"
+                    ]
+                  }
+                }
+              },
+              {
+                  "Sid": "vendor-ecr-read",
+                  "Effect": "Allow",
+                  "Principal": {
+                      "AWS": "arn:aws:iam::076340917683:root"
+                  },
+                  "Action": [
+                      "ecr:BatchCheckLayerAvailability",
+                      "ecr:BatchGetImage",
+                      "ecr:DescribeImageScanFindings",
+                      "ecr:DescribeImages",
+                      "ecr:DescribeRepositories",
+                      "ecr:GetDownloadUrlForLayer",
+                      "ecr:GetLifecyclePolicy",
+                      "ecr:GetLifecyclePolicyPreview",
+                      "ecr:GetRepositoryPolicy",
+                      "ecr:ListImages",
+                      "ecr:ListTagsForResource"
+                  ]
+              }
+            ]
+          }
+          POL_STATEMENT
+
+) || exit ${?}
+
+(( ++I ))
+(
+    echo "BLOCK "${I}""
+
+          source .env
+          cat .env
+
+          cat << LIFECYCLE_STATEMENT > ecr_lifecycle_policy.json
+          {
+            "rules": [
+              {
+                "rulePriority": 100,
+                "description": "Keep untagged images only 1 day",
+                "selection": {
+                  "tagStatus": "untagged",
+                  "countType": "sinceImagePushed",
+                  "countUnit": "days",
+                  "countNumber": 1
+                },
+                "action": {
+                  "type": "expire"
+                }
+              },
+              {
+                "rulePriority": 200,
+                "description": "Keep only the top-level SNAPSHOTS built in the past ${SNAPSHOT_KEEP_DAYS} days",
+                "selection": {
+                  "tagStatus": "tagged",
+                  "tagPatternList": [ "*-SNAPSHOT" ],
+                  "countType": "sinceImagePushed",
+                  "countUnit": "days",
+                  "countNumber": ${SNAPSHOT_KEEP_DAYS}
+                },
+                "action": {
+                  "type": "expire"
+                }
+              },
+              {
+                "rulePriority": 300,
+                "description": "Keep only fresh-built SNAPSHOT tags that AREN'T the top-level SNAPSHOTs, pushed in the last 5 days",
+                "selection": {
+                  "tagStatus": "tagged",
+                  "tagPatternList": [ "*-SNAPSHOT_b*" ],
+                  "countType": "sinceImagePushed",
+                  "countUnit": "days",
+                  "countNumber": 5
+                },
+                "action": {
+                  "type": "expire"
+                }
+              },
+              {
+                "rulePriority": 400,
+                "description": "Keep only fresh-built devel-* tags that AREN'T the top-level SNAPSHOTs, pushed in the last ${DEVEL_KEEP_DAYS} days",
+                "selection": {
+                  "tagStatus": "tagged",
+                  "tagPatternList": [ "devel-*" ],
+                  "countType": "sinceImagePushed",
+                  "countUnit": "days",
+                  "countNumber": ${DEVEL_KEEP_DAYS}
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+          LIFECYCLE_STATEMENT
+
+) || exit ${?}
+
+(( ++I ))
+(
+    echo "BLOCK "${I}""
+
+          source .env
+          cat .env
+
           cat ecr_lifecycle_policy.json
           aws ecr put-lifecycle-policy \
               --region "${ECR_AWS_REGION}" \
@@ -593,7 +1090,11 @@ docker()
           # Iterate over the array of built artifacts, and push them
           for BUILD in "${BUILDS[@]}" ; do
               echo "Pushing [${BUILD}] ..."
-              docker push "${BUILD}"
+              if [ "${TAGS_ADDED:-false}" != "true" ] && [ "${AUTHORITATIVE_TAG}" != "${BUILD}" ] ; then
+                  echo -e "\tTagging [${AUTHORITATIVE_TAG}] as [${BUILD}] ..."
+                  ( set -x ; exec docker tag "${AUTHORITATIVE_TAG}" "${BUILD}" ) || exit ${?}
+              fi
+              ( set -x ; exec docker push "${BUILD}" ) || exit ${?}
           done
 
 ) || exit ${?}

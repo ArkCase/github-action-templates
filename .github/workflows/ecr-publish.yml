@@ -205,6 +205,8 @@ jobs:
         env:
           ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
           ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
+          PARAM_PUBLISH_MAJOR: ""
+          PARAM_PUBLISH_MINOR: ""
         run: |
           source .env
           cat .env
@@ -245,6 +247,8 @@ jobs:
           # Make sure it's defined if it isn't already
           REVISION="${PARAM_REVISION}"
           PORTAL_VER="${PARAM_PORTAL}"
+          PUBLISH_MAJOR="${PARAM_PUBLISH_MAJOR}"
+          PUBLISH_MINOR="${PARAM_PUBLISH_MINOR}"
           if [ -z "${REVISION}" ] || [ -z "${PORTAL_VER}" ] ; then
               # Parse out the tag, handle the case when it's not there
               readarray -t NEW_VERSIONS < <(
@@ -275,7 +279,7 @@ jobs:
                           sed -e "s;^\s*ARG\s;export ${PREFIX};g"
                   )
 
-                  for R in "VER" "PORTAL_VER" ; do
+                  for R in "VER" "PORTAL_VER" "PUBLISH_MAJOR" "PUBLISH_MINOR" ; do
                       [ -z "${PREFIX}" ] || R="${PREFIX}${R}"
                       # This checks for each variable and outputs its
                       # value if present, or an empty string if absent
@@ -302,9 +306,20 @@ jobs:
               # We only override the FOIA Portal version if it wasn't provided as a parameter
               [ -z "${PORTAL_VER}" ] && PORTAL_VER="${NEW_VERSIONS[1]}"
 
+              # These two will allow us to produce tags using only the major version
+              # of the container, or the major-minor combo. This in turn allows
+              # references to the container based on this, which allows us to update
+              # software versions without requiring everyone to keep up perfectly
+              [ -z "${PUBLISH_MAJOR}" ] && PUBLISH_MAJOR="${NEW_VERSIONS[2]:-false}"
+              [ -z "${PUBLISH_MINOR}" ] && PUBLISH_MINOR="${NEW_VERSIONS[3]:-false}"
+
               echo "Computed REVISION=${REVISION}"
               echo "Computed PORTAL_VER=${PORTAL_VER}"
+              echo "Computed PUBLISH_MAJOR=${PUBLISH_MAJOR}"
+              echo "Computed PUBLISH_MINOR=${PUBLISH_MINOR}"
           fi
+          [ "${PUBLISH_MAJOR,,}" == "true" ] && PUBLISH_MAJOR="true" || PUBLISH_MAJOR="false"
+          [ "${PUBLISH_MINOR,,}" == "true" ] && PUBLISH_MINOR="true" || PUBLISH_MINOR="false"
 
           # Parse for vailidity ... we'll examine it more closely later
           #
@@ -422,6 +437,11 @@ jobs:
               echo "PORTAL_SNAPSHOT=${PORTAL_SNAPSHOT@Q}"
           fi
 
+          echo "export PUBLISH_MAJOR=${PUBLISH_MAJOR@Q}" >> .env
+          echo "PUBLISH_MAJOR=${PUBLISH_MAJOR@Q}"
+          echo "export PUBLISH_MINOR=${PUBLISH_MINOR@Q}" >> .env
+          echo "PUBLISH_MINOR=${PUBLISH_MINOR@Q}"
+
           export LEGACY="false"
           [[ "${GITHUB_REF_NAME}" =~ -legacy$ ]] && LEGACY="true"
           echo "export LEGACY=${LEGACY@Q}" >> .env
@@ -521,6 +541,12 @@ jobs:
           # If we have a pre-release tag, pre-pend a dash
           [ -n "${REVISION_PRERELEASE}" ] && REVISION_PRERELEASE="-${REVISION_PRERELEASE}"
 
+          MAJOR_REVISION=""
+          MINOR_REVISION=""
+          VERSION_PARTS=( ${REVISION_BASE_NUMBER//./ } )
+          [ "${PUBLISH_MAJOR}" == "true" ] && [ ${#VERSION_PARTS[@]} -ge 2 ] && MAJOR_REVISION="${VERSION_PARTS[0]}"
+          [ "${PUBLISH_MINOR}" == "true" ] && [ ${#VERSION_PARTS[@]} -ge 3 ] && MINOR_REVISION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}"
+
           # This will house all the different revisions by which this
           # artifact will be known
           REVISIONS=()
@@ -529,17 +555,26 @@ jobs:
           # separator here b/c the plus sign is not permitted in Docker tags
 
           # The first metadata must be appended with a leading underscore
-          REVISIONS+=("${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}${REVISION_METADATA:+_}${REVISION_METADATA}")
+          REVISION_SUFFIX="${REVISION_PRERELEASE}${REVISION_METADATA:+_}${REVISION_METADATA}"
+          REVISIONS+=("${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_SUFFIX}")
+          [ -n "${MAJOR_REVISION}" ] && REVISIONS+=("${REVISION_PREFIX}${MAJOR_REVISION}${REVISION_SUFFIX}")
+          [ -n "${MINOR_REVISION}" ] && REVISIONS+=("${REVISION_PREFIX}${MINOR_REVISION}${REVISION_SUFFIX}")
 
-          # For the other builds, if there's any metadata, it will need a dash up front
+          # For the other builds, if there's any metadata, it will need a dash up front from here on
           [ -n "${REVISION_METADATA}" ] && REVISION_METADATA="-${REVISION_METADATA}"
 
           # This is an intermediate revision with a little more build metadata
-          REVISIONS+=("${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}_b${GITHUB_RUN_NUMBER}${REVISION_METADATA}")
+          REVISION_SUFFIX="${REVISION_PRERELEASE}_b${GITHUB_RUN_NUMBER}${REVISION_METADATA}"
+          REVISIONS+=("${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_SUFFIX}")
+          [ -n "${MAJOR_REVISION}" ] && REVISIONS+=("${REVISION_PREFIX}${MAJOR_REVISION}${REVISION_SUFFIX}")
+          [ -n "${MINOR_REVISION}" ] && REVISIONS+=("${REVISION_PREFIX}${MINOR_REVISION}${REVISION_SUFFIX}")
 
           # This is the most exact revision, which will be used for "latest" computation
-          EXACT_REVISION="${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}_b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
+          REVISION_SUFFIX="${REVISION_PRERELEASE}_b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
+          EXACT_REVISION="${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_SUFFIX}"
           REVISIONS+=("${EXACT_REVISION}")
+          [ -n "${MAJOR_REVISION}" ] && REVISIONS+=("${REVISION_PREFIX}${MAJOR_REVISION}${REVISION_SUFFIX}")
+          [ -n "${MINOR_REVISION}" ] && REVISIONS+=("${REVISION_PREFIX}${MINOR_REVISION}${REVISION_SUFFIX}")
 
           TARGETS=()
           TARGETS+=("${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}")
