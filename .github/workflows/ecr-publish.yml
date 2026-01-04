@@ -20,12 +20,6 @@ on:
         type: string
         default: "arkcase-container-scan-results"
 
-      big-container-size:
-        description: "The size threshold a container image must match or pass (in MB) to be considered big, and thus trigger extra disk space clearing for security testing (defaults to 2048)"
-        required: false
-        type: string
-        default: "2048"
-
       compliance-scan:
         description: "Whether or not to scan for STIG compliance on the build"
         required: false
@@ -90,7 +84,6 @@ env:
   GH_TOKEN: ${{ github.token }}
 
   SCANNER_IMAGE: "arkcase/security-scanner:20251120.01"
-  BIG_CONTAINER_SIZE: ${{ inputs.big-container-size }}
 
   # Enable/disable STIG Compliance Scans
   SCAN_COMP: ${{ inputs.compliance-scan }}
@@ -129,14 +122,6 @@ jobs:
               # Parse for vailidity ... we'll examine it more closely later
               if [[ ! "${PARAM_PORTAL}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
                   echo "The FOIA Portal version is not valid: [${PARAM_PORTAL}]"
-                  exit 1
-              fi
-          fi
-
-          # We only care if we're going to run a scan
-          if [ "${SCAN_COMP}" == "true" ] || [ "${SCAN_VULN}" == "true" ] ; then
-              if [[ ! "${BIG_CONTAINER_SIZE}" =~ ^[1-9][0-9]*$ ]] ; then
-                  echo "The big-container-size parameter is not a valid number: [${BIG_CONTAINER_SIZE}]"
                   exit 1
               fi
           fi
@@ -454,6 +439,15 @@ jobs:
           echo "export PUSH_TO_PUBLIC=${PUSH_TO_PUBLIC@Q}" >> .env
           echo "PUSH_TO_PUBLIC=${PUSH_TO_PUBLIC@Q}"
 
+      - name: Show Current Build Space
+        run: df -kh
+
+      - name: Clear Out All Possible Disk Space
+        uses: jlumbroso/free-disk-space@main
+
+      - name: Show Maximized Build Space
+        run: df -kh
+
       - name: Build the Docker image
         env:
           ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
@@ -673,6 +667,10 @@ jobs:
           AUTHORITATIVE_TAG="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${EXACT_REVISION}"
           echo "AUTHORITATIVE_TAG=${AUTHORITATIVE_TAG@Q}" >> .env
           (
+              echo "Cleaning out the Docker system..."
+              docker system prune --all --force || true
+
+              echo "Launching the Docker build..."
               set -x
               exec docker build "${BUILD_ARGS[@]}" --tag "${AUTHORITATIVE_TAG}" .
           ) || exit ${?}
@@ -696,15 +694,6 @@ jobs:
               git tag --force "${PREFIX}/${R//_/+}"
           done
 
-          # We only care about container size if we're running security scanning
-          BIG_CONTAINER="false"
-          if [ "${SCAN_COMP}" == "true" ] || [ "${SCAN_VULN}" == "true" ] ; then
-              # Identify the image size (in MB), and check to see if it qualifies as a "Big Container" (rounded up)
-              SIZE="$(docker image inspect "${AUTHORITATIVE_TAG}" | jq -r "([.[].Size] | add) / (1024 * 1024) | ceil")"
-              [ ${SIZE} -ge ${BIG_CONTAINER_SIZE} ] && BIG_CONTAINER="true"
-          fi
-          echo "BIG_CONTAINER=${BIG_CONTAINER}" >> "${GITHUB_ENV}"
-
           REPORT_TARGET_PATH="${IMAGE_URI}/${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}/b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
 
           ARTIFACT_IDENTIFIER=""
@@ -713,7 +702,7 @@ jobs:
               develop | legacy | develop-legacy ) ARTIFACT_IDENTIFIER=".${GITHUB_REF_NAME}" ;;
 
               # We only do vulnerability scanning for main and develop
-              * ) SCAN_COMP="false" ; SCAN_VULN="false" ; BIG_CONTAINER="false" ;;
+              * ) SCAN_COMP="false" ; SCAN_VULN="false" ;;
           esac
 
           # TODO: account for the branch name!
@@ -753,8 +742,6 @@ jobs:
               VULN_REPORT_JSON_SOURCE
 
               SCAN_REPORT_RETENTION_DAYS
-
-              BIG_CONTAINER
           )
 
           for VAR in "${VARS[@]}" ; do
@@ -762,12 +749,6 @@ jobs:
               echo "${VAR}=${VAL@Q}" >> .env
               echo "${VAR}=${VAL}" >> "${GITHUB_ENV}"
           done
-
-      - name: Clear out extra disk space for security scans due to a large container image
-        uses: jlumbroso/free-disk-space@main
-        if: ${{ env.BIG_CONTAINER == 'true' }}
-        with:
-          docker-images: false
 
       - name: Scan for STIG compliance
         if: ${{ env.SCAN_COMP == 'true' }}
