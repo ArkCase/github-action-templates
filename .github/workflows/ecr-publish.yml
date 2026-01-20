@@ -199,10 +199,12 @@ jobs:
     needs: [ "Compute-Revision" ]
     runs-on: ubuntu-22.04
     strategy:
+      max-parallel: 3
+      fail-fast: true
       matrix:
         revision: ${{ fromJSON(needs.Compute-Revisions.outputs.revisions) }}
     steps:
-      - name: Initialize the environment file for ${{ github.repository }}
+      - name: Initialize the environment file for ${{ github.repository }} (REVISION = ${{ matrix.revision }})
         run: |
           # Start with a clean environment
           : > .env
