@@ -119,7 +119,7 @@ jobs:
           # just to save computation time.
           if [ -n "${PARAM_REVISION}" ] ; then
               if [[ "${PARAM_REVISION}" =~ ${REVISION_REGEX} ]] ; then
-                  jq -cn --arg VER "${PARAM_REVISION}" '[ ($VER | tostring) ]' > "${GITHUB_OUTPUT}"
+                  echo "value=[${PARAM_REVISION@Q}]" | tr ' ' ',' | tr "'" '"' >> "${GITHUB_OUTPUT}"
                   exit ${?}
               fi
               echo "Revision number is not valid: [${PARAM_REVISION}]"
