@@ -119,6 +119,7 @@ jobs:
           # just to save computation time.
           if [ -n "${PARAM_REVISION}" ] ; then
               if [[ "${PARAM_REVISION}" =~ ${REVISION_REGEX} ]] ; then
+                  echo -e "The REVISION parameter was given with the value [${PARAM_REVISION}]"
                   echo "value=[${PARAM_REVISION@Q}]" | tr ' ' ',' | tr "'" '"' >> "${GITHUB_OUTPUT}"
                   exit ${?}
               fi
