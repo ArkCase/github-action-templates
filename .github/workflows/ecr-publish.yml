@@ -546,6 +546,7 @@ jobs:
 
       - name: Build the Docker image
         env:
+          MATRIX_REVISION: ${{ matrix.revision }}
           ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
           ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
           ECR_AWS_REGION: ${{ secrets.ECR_AWS_REGION }}
@@ -800,6 +801,10 @@ jobs:
               # We only do vulnerability scanning for main and develop
               * ) SCAN_COMP="false" ; SCAN_VULN="false" ;;
           esac
+
+          # If we're running builds for multiple dynamic revisions,
+          # we have to append the revision to the artifact name
+          [ "${MATRIX_REVISION}" == "*" ] || ARTIFACT_IDENTIFIER+="-${MATRIX_REVISION}"
 
           # TODO: account for the branch name!
           COMP_REPORT_BASE="compliance${ARTIFACT_IDENTIFIER}"
