@@ -99,7 +99,7 @@ env:
   REVISION_REGEX: "^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$"
 
 jobs:
-  Compute-Revision:
+  Compute-Revisions:
     runs-on: ubuntu-22.04
 
     steps:
@@ -201,7 +201,7 @@ jobs:
       revisions: ${{ steps.compute.outputs.value }}
 
   ECR-Publishing:
-    needs: [ "Compute-Revision" ]
+    needs: [ "Compute-Revisions" ]
     runs-on: ubuntu-22.04
     strategy:
       max-parallel: 3
