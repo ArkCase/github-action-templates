@@ -204,7 +204,7 @@ jobs:
       matrix:
         revision: ${{ fromJSON(needs.Compute-Revisions.outputs.revisions) }}
     steps:
-      - name: Initialize the environment file for ${{ github.repository }} (REVISION = ${{ matrix.revision }})
+      - name: Initialize the environment file for ${{ github.repository }} (MATRIX REVISION = ${{ matrix.revision }})
         run: |
           # Start with a clean environment
           : > .env
