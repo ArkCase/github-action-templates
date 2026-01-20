@@ -96,9 +96,111 @@ env:
   DEVEL_KEEP_DAYS: 30
   SNAPSHOT_KEEP_DAYS: 30
 
+  REVISION_REGEX: "^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$"
+
 jobs:
-  ECR-Publishing:
+  Compute-Revision:
     runs-on: ubuntu-22.04
+
+    steps:
+      # This is inefficient, but necessary
+      - name: Checkout source code
+        uses: actions/checkout@v3
+
+      - id: compute
+        # TODO: Do the actual computation to list the versions
+        # for which the build must be run. The list must contain
+        # at least one value (or the build will not be run!),
+        # which can be an asterisk ("*") to indicate that there
+        # is no special-case version to build for, and thus the
+        # algorithm should run the build once, and just as
+        # before, compute the version in flight
+        env:
+          PARAM_REVISION: ${{ inputs.revision }}
+        run: |
+          # If we were given a non-empty value for PARAM_REVISION,
+          # then we simply output that and call it a day. Otherwise,
+          # proceed with the computation.
+          if [ -n "${PARAM_REVISION}" ] ; then
+              jq -cn --arg VER "${PARAM_REVISION}" '[ ($VER | tostring) ]' > "${GITHUB_OUTPUT}"
+              exit ${?}
+          fi
+
+          COMPUTED="false"
+          OUT=""
+
+          METHOD=""
+          SCRIPT="${GITHUB_WORKSPACE}/.compute-alt-revisions"
+          LIST_FILE="${GITHUB_WORKSPACE}/.alt-revisions"
+          if [ -f "${SCRIPT}" ] ; then
+              # If there's a script called ".compute-alt-revisions" in the
+              # root checkout directory, then we run that and its STDOUT
+              # becomes the result, and is processed as if it were the content
+              # of the ".alt-revisions" file (see below).
+              RC=0
+              OUT="$( "${SCRIPT}" )" || RC=${?}
+              if [ ${RC} -ne 0 ] ; then
+                  echo "ERROR: Failed to compute the alternate revisions using ${SCRIPT} (rc=${?}): ${OUT}"
+                  exit ${RC}
+              fi
+              METHOD="${SCRIPT}"
+              echo -e "The script ${SCRIPT} produced the following revisions:\n${OUT}"
+          elif [ -f "${LIST_FILE}" ] ; then
+              # If there's no script to do the computation, but there's a
+              # file called ".alt-revisions" then each line of the file will be
+              # examined.
+              OUT="$( cat "${LIST_FILE}" )"
+              METHOD="${LIST_FILE}"
+              echo -e "The static file ${LIST_FILE} produced the following revisions:\n${OUT}"
+          else
+              echo "No dynamic revisions were computed - will use the default algorithm!"
+          fi
+
+          REVISIONS=()
+          # The output will be filtered to remove comments and blank lines. The
+          # resulting list will be sorted using "version sort" order, ascending.
+          [ -n "${METHOD}" ] && readarray -t REVISIONS < <(echo -ne "${OUT}" | sed -e 's;#.*$;;g' -e '/^\s*$/d' | sort -V -u)
+
+          # Did we find any revisions?
+          if [ ${#REVISIONS[@]} -gt 0 ] ; then
+              # However we got the revisions, we will validate every single one
+              # against the regex. If there are any invalid values, this is an
+              # error condition and it will fail the job and be reported, as well
+              # as the means by which the invalid revision was obtained.
+              #
+              # If the above methods yielded any valid revisions, these are
+              # returned in the format "value=[ json-array ]". If they did not
+              # yield any revisions (i.e. no invalid or non-blank revisions), then
+              # the default list of "*" is produced to allow the default algorithm
+              # to take over and work as normal.
+
+              METHOD="$(basename "${METHOD}")"
+              for REVISION in "${REVISIONS[@]}" ; do
+                  # If this is a valid revision number, keep it and check the next one!
+                  [ -n "${REVISION}" ] && [[ "${REVISION}" =~ ${REVISION_REGEX} ]] && continue
+
+                  # This is an invalid revision number ... go kablooey!
+                  echo "ERROR: Invalid revision number [${REVISION}] obtained via [${METHOD}]"
+                  exit 1
+              done
+          else
+              # No revisions found ... use the default algorithm!
+              REVISIONS=( "*" )
+          fi
+
+          # This should yield the required output
+          echo "value=[${REVISIONS[@]@Q}]" | tr ' ' ',' | tr "'" '"' > "${GITHUB_OUTPUT}"
+          exit 0
+
+    outputs:
+      revisions: ${{ steps.compute.outputs.value }}
+
+  ECR-Publishing:
+    needs: [ "Compute-Revision" ]
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        revision: ${{ fromJSON(needs.Compute-Revisions.outputs.revisions) }}
     steps:
       - name: Initialize the environment file for ${{ github.repository }}
         run: |
@@ -110,20 +212,16 @@ jobs:
           PARAM_REVISION: ${{ inputs.revision }}
           PARAM_PORTAL: ${{ inputs.portal }}
         run: |
-          if [ -n "${PARAM_REVISION}" ] ; then
-              # Parse for vailidity ... we'll examine it more closely later
-              if [[ ! "${PARAM_REVISION}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
-                  echo "Revision number is not valid: [${PARAM_REVISION}]"
-                  exit 1
-              fi
+          # Parse for vailidity ... we'll examine it more closely later
+          if [ -n "${PARAM_REVISION}" ] && [[ ! "${PARAM_REVISION}" =~ ${REVISION_REGEX} ]] ; then
+              echo "Revision number is not valid: [${PARAM_REVISION}]"
+              exit 1
           fi
 
-          if [ -n "${PARAM_PORTAL}" ] ; then
-              # Parse for vailidity ... we'll examine it more closely later
-              if [[ ! "${PARAM_PORTAL}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
-                  echo "The FOIA Portal version is not valid: [${PARAM_PORTAL}]"
-                  exit 1
-              fi
+          # Parse for vailidity ... we'll examine it more closely later
+          if [ -n "${PARAM_PORTAL}" ] && [[ ! "${PARAM_PORTAL}" =~ ${REVISION_REGEX} ]] ; then
+              echo "The FOIA Portal version is not valid: [${PARAM_PORTAL}]"
+              exit 1
           fi
 
       - name: Checkout source code
@@ -139,6 +237,7 @@ jobs:
 
       - name: Initialize the environment file
         env:
+          MATRIX_REVISION: ${{ matrix.revision }}
           PARAM_REVISION: ${{ inputs.revision }}
           PARAM_PORTAL: ${{ inputs.portal }}
         run: |
@@ -148,6 +247,13 @@ jobs:
           TIMESTAMP="$(date -u +%Y%m%d%H%M%S)"
           echo "export TIMESTAMP=${TIMESTAMP@Q}" >> .env
           echo "TIMESTAMP=${TIMESTAMP@Q}"
+
+          # If we're not given an explicit revision, and the
+          # matrix revision is NOT the value "*", then this means
+          # we have to build for a specific revision, and thus
+          # we treat the value from MATRIX_REVISION as if it were
+          # a parameter given to us on invocation.
+          [ -z "${PARAM_REVISION}" ] && [ "${MATRIX_REVISION}" != "*" ] && PARAM_REVISION="${MATRIX_REVISION}"
 
           echo "export PARAM_REVISION=${PARAM_REVISION@Q}" >> .env
           echo "PARAM_REVISION=${PARAM_REVISION@Q}"
