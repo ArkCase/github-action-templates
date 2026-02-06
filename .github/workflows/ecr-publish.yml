@@ -113,8 +113,6 @@ jobs:
           PARAM_REVISION: ${{ inputs.revision }}
           PARAM_PORTAL: ${{ inputs.portal }}
         run: |
-          echo "USER: $(id)"
-
           # If we were given a non-empty input value for PARAM_REVISION,
           # then we simply output that and call it a day. Otherwise,
           # proceed with the computation. We also validate it early
@@ -215,7 +213,6 @@ jobs:
       - name: Initialize the environment file for ${{ github.repository }}
         run: |
           # Start with a clean environment
-          echo "USER: $(id)"
           : > .env
 
       - name: Checkout source code
