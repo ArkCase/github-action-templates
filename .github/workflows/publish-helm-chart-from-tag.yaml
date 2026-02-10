@@ -75,7 +75,7 @@ jobs:
       # repository to keep things clean.
       - name: Checkout the chart sources
         if: ${{ env.EXIT == 'false' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           token: ${{ secrets.RELEASE_WORKFLOW_PAT }}
           path: ${{ env.SRC_REPO_DIR }}
@@ -151,7 +151,7 @@ jobs:
 
       - name: Checkout the GH Pages branch
         if: ${{ env.EXIT == 'false' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           token: ${{ secrets.RELEASE_WORKFLOW_PAT }}
           path: ${{ env.TGT_REPO_DIR }}
