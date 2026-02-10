@@ -100,7 +100,7 @@ env:
 
 jobs:
   Compute-Revisions:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       # This is inefficient, but necessary
@@ -203,7 +203,7 @@ jobs:
 
   ECR-Publishing:
     needs: [ "Compute-Revisions" ]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       max-parallel: 3
       fail-fast: true
