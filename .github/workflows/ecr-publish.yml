@@ -19,6 +19,11 @@ on:
         required: false
         type: string
         default: "arkcase-container-scan-results"
+      maximize-build-space:
+        description: "Whether or not to maximize the build space by removing unnecessary tools & libraries"
+        required: false
+        type: boolean
+        default: false
 
       compliance-scan:
         description: "Whether or not to scan for STIG compliance on the build"
@@ -92,6 +97,8 @@ env:
   # Enable/disable Vulnerability Scans
   SCAN_VULN: ${{ inputs.vulnerabilities-scan }}
   SCAN_VULN_REQUIRED: ${{ inputs.vulnerabilities-required }}
+
+  MAXIMIZE_BUILD_SPACE: ${{ inputs.maximize-build-space }}
 
   DEVEL_KEEP_DAYS: 30
   SNAPSHOT_KEEP_DAYS: 30
@@ -537,12 +544,15 @@ jobs:
           echo "PUSH_TO_PUBLIC=${PUSH_TO_PUBLIC@Q}"
 
       - name: Show Current Build Space
+        if: ${{ env.MAXIMIZE_BUILD_SPACE == 'true' }}
         run: df -kh
 
       - name: Clear Out All Possible Disk Space
+        if: ${{ env.MAXIMIZE_BUILD_SPACE == 'true' }}
         uses: jlumbroso/free-disk-space@main
 
       - name: Show Maximized Build Space
+        if: ${{ env.MAXIMIZE_BUILD_SPACE == 'true' }}
         run: df -kh
 
       - name: Build the Docker image
