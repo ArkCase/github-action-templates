@@ -820,20 +820,22 @@ jobs:
           SCAN_DIR="$(readlink -f .)/security-scan"
 
           # TODO: account for the branch name!
-          COMP_REPORT_BASE="${SCAN_DIR}/compliance${ARTIFACT_IDENTIFIER}"
-          COMP_REPORT_PATTERN="${COMP_REPORT_BASE}.*"
-          COMP_REPORT_XML_SOURCE="${COMP_REPORT_BASE}.xml"
-          COMP_REPORT_HDF_SOURCE="${COMP_REPORT_BASE}.hdf"
-          COMP_REPORT_HTML_SOURCE="${COMP_REPORT_BASE}.html"
-          COMP_REPORT_SARIF_SOURCE="${COMP_REPORT_BASE}.sarif"
+          COMP_REPORT_BASE="compliance${ARTIFACT_IDENTIFIER}"
+          COMP_REPORT_PATH="${SCAN_DIR}/${COMP_REPORT_BASE}"
+          COMP_REPORT_PATTERN="${COMP_REPORT_PATH}.*"
+          COMP_REPORT_XML_SOURCE="${COMP_REPORT_PATH}.xml"
+          COMP_REPORT_HDF_SOURCE="${COMP_REPORT_PATH}.hdf"
+          COMP_REPORT_HTML_SOURCE="${COMP_REPORT_PATH}.html"
+          COMP_REPORT_SARIF_SOURCE="${COMP_REPORT_PATH}.sarif"
 
           # TODO: account for the branch name!
-          VULN_REPORT_BASE="${SCAN_DIR}/vulnerabilities${ARTIFACT_IDENTIFIER}"
-          VULN_REPORT_PATTERN="${VULN_REPORT_BASE}.*"
-          VULN_REPORT_JSON_SOURCE="${VULN_REPORT_BASE}.json"
-          VULN_REPORT_HTML_SOURCE="${VULN_REPORT_BASE}.html"
-          VULN_REPORT_SARIF_SOURCE="${VULN_REPORT_BASE}.sarif"
-          VULN_REPORT_SBOM_SOURCE="${VULN_REPORT_BASE}.cdx"
+          VULN_REPORT_BASE="vulnerabilities${ARTIFACT_IDENTIFIER}"
+          VULN_REPORT_PATH="${SCAN_DIR}/${VULN_REPORT_BASE}"
+          VULN_REPORT_PATTERN="${VULN_REPORT_PATH}.*"
+          VULN_REPORT_JSON_SOURCE="${VULN_REPORT_PATH}.json"
+          VULN_REPORT_HTML_SOURCE="${VULN_REPORT_PATH}.html"
+          VULN_REPORT_SARIF_SOURCE="${VULN_REPORT_PATH}.sarif"
+          VULN_REPORT_SBOM_SOURCE="${VULN_REPORT_PATH}.cdx"
 
           VARS=(
               AUTHORITATIVE_TAG
