@@ -817,8 +817,10 @@ jobs:
           # we have to append the revision to the artifact name
           [ "${MATRIX_REVISION}" == "*" ] || ARTIFACT_IDENTIFIER+="-${MATRIX_REVISION}"
 
+          SCAN_DIR="$(readlink -f .)/security-scan"
+
           # TODO: account for the branch name!
-          COMP_REPORT_BASE="compliance${ARTIFACT_IDENTIFIER}"
+          COMP_REPORT_BASE="${SCAN_DIR}/compliance${ARTIFACT_IDENTIFIER}"
           COMP_REPORT_PATTERN="${COMP_REPORT_BASE}.*"
           COMP_REPORT_XML_SOURCE="${COMP_REPORT_BASE}.xml"
           COMP_REPORT_HDF_SOURCE="${COMP_REPORT_BASE}.hdf"
@@ -826,7 +828,7 @@ jobs:
           COMP_REPORT_SARIF_SOURCE="${COMP_REPORT_BASE}.sarif"
 
           # TODO: account for the branch name!
-          VULN_REPORT_BASE="vulnerabilities${ARTIFACT_IDENTIFIER}"
+          VULN_REPORT_BASE="${SCAN_DIR}/vulnerabilities${ARTIFACT_IDENTIFIER}"
           VULN_REPORT_PATTERN="${VULN_REPORT_BASE}.*"
           VULN_REPORT_JSON_SOURCE="${VULN_REPORT_BASE}.json"
           VULN_REPORT_HTML_SOURCE="${VULN_REPORT_BASE}.html"
@@ -837,7 +839,10 @@ jobs:
               AUTHORITATIVE_TAG
               REPORT_TARGET_PATH
 
+              SCAN_DIR
               SCAN_COMP
+              SCAN_VULN
+
               COMP_REPORT_BASE
               COMP_REPORT_PATTERN
               COMP_REPORT_XML_SOURCE
@@ -845,7 +850,6 @@ jobs:
               COMP_REPORT_HTML_SOURCE
               COMP_REPORT_SARIF_SOURCE
 
-              SCAN_VULN
               VULN_REPORT_BASE
               VULN_REPORT_PATTERN
               VULN_REPORT_HTML_SOURCE
@@ -876,7 +880,8 @@ jobs:
 
           echo "Launching the Compliance Scan for ${AUTHORITATIVE_TAG}..."
 
-          RESULTS_MOUNT="$(readlink -f ".")"
+          [ -d "${SCAN_DIR}" ] && rm -rf "${SCAN_DIR}"
+          mkdir -p "${SCAN_DIR}"
           DOCKER_SOCKET="/var/run/docker.sock"
           CMD=(
               docker run 
@@ -884,7 +889,7 @@ jobs:
                   --name compliance-scanner
                   --env RESULTS_NAME="${COMP_REPORT_BASE}"
                   --volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}"
-                  --volume "${RESULTS_MOUNT}:/results"
+                  --volume "${SCAN_DIR}:/results"
                   "${ECR_REGISTRY_PRIVATE}/${SCANNER_IMAGE}"
                   compliance "${AUTHORITATIVE_TAG}"
           )
@@ -942,7 +947,8 @@ jobs:
 
           echo "Launching the Vulnerability Scan for ${AUTHORITATIVE_TAG}..."
 
-          RESULTS_MOUNT="$(readlink -f ".")"
+          [ -d "${SCAN_DIR}" ] && rm -rf "${SCAN_DIR}"
+          mkdir -p "${SCAN_DIR}"
           DOCKER_SOCKET="/var/run/docker.sock"
           CMD=(
               docker run 
@@ -950,7 +956,7 @@ jobs:
                   --name vulnerability-scanner
                   --env RESULTS_NAME="${VULN_REPORT_BASE}"
                   --volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}"
-                  --volume "${RESULTS_MOUNT}:/results"
+                  --volume "${SCAN_DIR}:/results"
                   "${ECR_REGISTRY_PRIVATE}/${SCANNER_IMAGE}"
                   vulnerabilities "${AUTHORITATIVE_TAG}"
           )
