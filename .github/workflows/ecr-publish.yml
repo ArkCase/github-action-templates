@@ -610,7 +610,7 @@ jobs:
           "${PUSH_TO_PUBLIC}" && BASE_REGISTRY="${ECR_REGISTRY_PUBLIC}"
           BUILD_ARGS+=(--build-arg "BASE_REGISTRY=${BASE_REGISTRY}")
 
-          SECRETS_DIR="$(mktemp -d --tmpdir="$(readlink -f .)" .secrets-XXXXXX.tmp")"
+          SECRETS_DIR="$(mktemp -d --tmpdir="$(readlink -f .)" ".secrets-XXXXXX.tmp")"
           mkdir -p "${SECRETS_DIR}"
 
           # Next, add all the stuff S3 will need to pull crap
