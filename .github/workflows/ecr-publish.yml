@@ -809,7 +809,7 @@ jobs:
               set -x
               exec docker build "${BUILD_ARGS[@]}" --tag "${AUTHORITATIVE_TAG}" .
           ) || RC=${?}
-          rm -rf "${SECRETS_FILES[@]}" &>/dev/null || true
+          shred -u "${SECRETS_FILES[@]}" &>/dev/null || true
           [ ${RC} -eq 0 ] || exit ${RC}
 
           # Once the build succeeds, we create the required tags as appropriate
