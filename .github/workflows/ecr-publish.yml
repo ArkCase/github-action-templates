@@ -68,9 +68,11 @@ on:
         required: false
       ALF_QUAY_IO_PASSWORD:
         required: false
-      CURL_ENCRYPTION_KEY:
+      CHAINGUARD_USERNAME:
         required: false
-      CURL_AUTH_FILE:
+      CHAINGUARD_PASSWORD:
+        required: false
+      CURL_ENCRYPTION_KEY:
         required: false
       CURL_USERNAME:
         required: false
@@ -274,6 +276,23 @@ jobs:
               [ -v ALF_QUAY_IO_USERNAME ] && echo -e "\tUSERNAME: [$(echo -n "${ALF_QUAY_IO_USERNAME}" | sha256sum | awk '{ print $1 }')]"
               [ -v ALF_QUAY_IO_PASSWORD ] && echo -e "\tPASSWORD: [$(echo -n "${ALF_QUAY_IO_PASSWORD}" | sha256sum | awk '{ print $1 }')]"
               echo "The quay.io credentials were insufficient. Will not authenticate."
+          fi
+
+      - name: Docker Login to Chainguard (if applicable)
+        env:
+          CHAINGUARD_USERNAME: ${{ secrets.CHAINGUARD_USERNAME }}
+          CHAINGUARD_PASSWORD: ${{ secrets.CHAINGUARD_PASSWORD }}
+        run: |
+          source .env
+          cat .env
+
+          if [ -v CHAINGUARD_USERNAME ] && [ -v CHAINGUARD_PASSWORD ] && [ -n "${CHAINGUARD_USERNAME}" ] && [ -n "${CHAINGUARD_PASSWORD}" ] ; then
+              docker login -u "${CHAINGUARD_USERNAME}" -p "${CHAINGUARD_PASSWORD}" cgr.dev
+          else
+              [ -v CHAINGUARD_USERNAME ] || [ -v CHAINGUARD_PASSWORD ] && echo "These are the Chainguard credentials given (sha256sum):"
+              [ -v CHAINGUARD_USERNAME ] && echo -e "\tUSERNAME: [$(echo -n "${CHAINGUARD_USERNAME}" | sha256sum | awk '{ print $1 }')]"
+              [ -v CHAINGUARD_PASSWORD ] && echo -e "\tPASSWORD: [$(echo -n "${CHAINGUARD_PASSWORD}" | sha256sum | awk '{ print $1 }')]"
+              echo "The Chainguard credentials were insufficient. Will not authenticate."
           fi
 
         # The AWS login needs to happen before the build b/c the
@@ -564,11 +583,9 @@ jobs:
           ECR_AWS_ACCESS_KEY: ${{ secrets.ECR_AWS_ACCESS_KEY }}
           ECR_AWS_SECRET_ACCESS_KEY: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
           CURL_ENCRYPTION_KEY: ${{ secrets.CURL_ENCRYPTION_KEY }}
-          CURL_AUTH_FILE: ${{ secrets.CURL_AUTH_FILE }}
           CURL_USERNAME: ${{ secrets.CURL_USERNAME }}
           CURL_PASSWORD: ${{ secrets.CURL_PASSWORD }}
           MVN_GET_ENCRYPTION_KEY: ${{ secrets.MVN_GET_ENCRYPTION_KEY }}
-          MVN_GET_AUTH_FILE: ${{ secrets.MVN_GET_AUTH_FILE }}
           MVN_GET_USERNAME: ${{ secrets.MVN_GET_USERNAME }}
           MVN_GET_PASSWORD: ${{ secrets.MVN_GET_PASSWORD }}
         run: |
@@ -593,33 +610,34 @@ jobs:
           "${PUSH_TO_PUBLIC}" && BASE_REGISTRY="${ECR_REGISTRY_PUBLIC}"
           BUILD_ARGS+=(--build-arg "BASE_REGISTRY=${BASE_REGISTRY}")
 
-          SECRETS_FILES=()
+          SECRETS_DIR="$(mktemp -d --tmpdir="$(readlink -f .)" .secrets-XXXXXX.tmp")"
+          mkdir -p "${SECRETS_DIR}"
 
           # Next, add all the stuff S3 will need to pull crap
-          AWS_SECRETS_FILE="$(mktemp --tmpdir="$(readlink -f .)" "aws-access-XXXXXX.tmp")"
-          SECRETS_FILES+=( "${AWS_SECRETS_FILE}" )
+          AWS_SECRETS="${SECRETS_DIR}/aws"
           (
               echo "export AWS_ACCESS_KEY_ID=${ECR_AWS_ACCESS_KEY@Q}"
               echo "export AWS_SECRET_ACCESS_KEY=${ECR_AWS_SECRET_ACCESS_KEY@Q}"
               echo "export AWS_REGION=${ECR_AWS_REGION@Q}"
-          ) &> "${AWS_SECRETS_FILE}"
-          BUILD_ARGS+=(--secret id=aws_auth,src="${AWS_SECRETS_FILE}")
+          ) |& sort &> "${AWS_SECRETS}"
+          BUILD_ARGS+=(--secret id=aws_auth,src="${AWS_SECRETS}")
+          sha256sum "${AWS_SECRETS}"
 
           # Add the Curl authentication deetz
-          CURL_SECRETS_FILE="$(mktemp --tmpdir="$(readlink -f .)" "curl-access-XXXXXX.tmp")"
-          SECRETS_FILES+=( "${CURL_SECRETS_FILE}" )
+          CURL_SECRETS="${SECRETS_DIR}/curl"
           for VAR in "${!CURL_@}" ; do
               echo "export ${VAR}=${!VAR@Q}"
-          done &> "${CURL_SECRETS_FILE}"
-          BUILD_ARGS+=(--secret id=curl_auth,src="${CURL_SECRETS_FILE}")
+          done |& sort &> "${CURL_SECRETS}"
+          BUILD_ARGS+=(--secret id=curl_auth,src="${CURL_SECRETS}")
+          sha256sum "${CURL_SECRETS}"
 
           # Add the Maven authentication deetz
-          MVN_GET_SECRETS_FILE="$(mktemp --tmpdir="$(readlink -f .)" "mvn-get-access-XXXXXX.tmp")"
-          SECRETS_FILES+=( "${MVN_GET_SECRETS_FILE}" )
+          MVN_GET_SECRETS="${SECRETS_DIR}/mvn-get"
           for VAR in "${!MVN_GET_@}" ; do
               echo "export ${VAR}=${!VAR@Q}"
-          done &> "${MVN_GET_SECRETS_FILE}"
-          BUILD_ARGS+=(--secret id=mvn_get_auth,src="${MVN_GET_SECRETS_FILE}")
+          done |& sort &> "${MVN_GET_SECRETS}"
+          BUILD_ARGS+=(--secret id=mvn_get_auth,src="${MVN_GET_SECRETS}")
+          sha256sum "${MVN_GET_SECRETS}"
 
           # TODO: Remove these --build-arg declarations when all container images are
           # modified to use secrets vs. envvars/parameters for their credentials
@@ -809,7 +827,8 @@ jobs:
               set -x
               exec docker build "${BUILD_ARGS[@]}" --tag "${AUTHORITATIVE_TAG}" .
           ) || RC=${?}
-          shred -u "${SECRETS_FILES[@]}" &>/dev/null || true
+          find "${SECRETS_DIR}" -type f -exec shred -u "{}" ";" || true
+          rm -rf "${SECRETS_DIR}" || true
           [ ${RC} -eq 0 ] || exit ${RC}
 
           # Once the build succeeds, we create the required tags as appropriate
