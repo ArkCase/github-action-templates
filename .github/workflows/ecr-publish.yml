@@ -593,7 +593,36 @@ jobs:
           "${PUSH_TO_PUBLIC}" && BASE_REGISTRY="${ECR_REGISTRY_PUBLIC}"
           BUILD_ARGS+=(--build-arg "BASE_REGISTRY=${BASE_REGISTRY}")
 
+          SECRETS_FILES=()
+
           # Next, add all the stuff S3 will need to pull crap
+          AWS_SECRETS_FILE="$(mktemp --tmpdir="$(readlink -f .)" "aws-access-XXXXXX.tmp")"
+          SECRETS_FILES+=( "${AWS_SECRETS_FILE}" )
+          (
+              echo "export AWS_ACCESS_KEY_ID=${ECR_AWS_ACCESS_KEY@Q}"
+              echo "export AWS_SECRET_ACCESS_KEY=${ECR_AWS_SECRET_ACCESS_KEY@Q}"
+              echo "export AWS_REGION=${ECR_AWS_REGION@Q}"
+          ) &> "${AWS_SECRETS_FILE}"
+          BUILD_ARGS+=(--secret id=aws_auth,src="${AWS_SECRETS_FILE}")
+
+          # Add the Curl authentication deetz
+          CURL_SECRETS_FILE="$(mktemp --tmpdir="$(readlink -f .)" "curl-access-XXXXXX.tmp")"
+          SECRETS_FILES+=( "${CURL_SECRETS_FILE}" )
+          for VAR in "${!CURL_@}" ; do
+              echo "export ${VAR}=${!VAR@Q}"
+          done &> "${CURL_SECRETS_FILE}"
+          BUILD_ARGS+=(--secret id=curl_auth,src="${CURL_SECRETS_FILE}")
+
+          # Add the Maven authentication deetz
+          MVN_GET_SECRETS_FILE="$(mktemp --tmpdir="$(readlink -f .)" "mvn-get-access-XXXXXX.tmp")"
+          SECRETS_FILES+=( "${MVN_GET_SECRETS_FILE}" )
+          for VAR in "${!MVN_GET_@}" ; do
+              echo "export ${VAR}=${!VAR@Q}"
+          done &> "${MVN_GET_SECRETS_FILE}"
+          BUILD_ARGS+=(--secret id=mvn_get_auth,src="${MVN_GET_SECRETS_FILE}")
+
+          # TODO: Remove these --build-arg declarations when all container images are
+          # modified to use secrets vs. envvars/parameters for their credentials
           BUILD_ARGS+=(--build-arg "AWS_ACCESS_KEY_ID=${ECR_AWS_ACCESS_KEY}")
           BUILD_ARGS+=(--build-arg "AWS_SECRET_ACCESS_KEY=${ECR_AWS_SECRET_ACCESS_KEY}")
           BUILD_ARGS+=(--build-arg "AWS_REGION=${ECR_AWS_REGION}")
@@ -602,6 +631,7 @@ jobs:
           for VAR in "${!CURL_@}" "${!MVN_GET_@}" ; do
               BUILD_ARGS+=(--build-arg "${VAR}=${!VAR}")
           done
+          # End removable section
 
           # Mark as legacy if needed
           [ "${LEGACY}" == "true" ] && BUILD_ARGS+=(--label "LEGACY=${LEGACY}")
@@ -774,6 +804,7 @@ jobs:
           # section, below.
           AUTHORITATIVE_TAG="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${EXACT_REVISION}"
           echo "AUTHORITATIVE_TAG=${AUTHORITATIVE_TAG@Q}" >> .env
+          RC=0
           (
               echo "Cleaning out the Docker system..."
               docker system prune --all --force || true
@@ -781,7 +812,9 @@ jobs:
               echo "Launching the Docker build..."
               set -x
               exec docker build "${BUILD_ARGS[@]}" --tag "${AUTHORITATIVE_TAG}" .
-          ) || exit ${?}
+          ) || RC=${?}
+          rm -rf "${SECRETS_FILES[@]}" &>/dev/null || true
+          [ ${RC} -eq 0 ] || exit ${RC}
 
           # Once the build succeeds, we create the required tags as appropriate
           if [ -z "${REVISION_PRERELEASE}" ] ; then
