@@ -623,10 +623,6 @@ jobs:
 
           # TODO: Remove these --build-arg declarations when all container images are
           # modified to use secrets vs. envvars/parameters for their credentials
-          BUILD_ARGS+=(--build-arg "AWS_ACCESS_KEY_ID=${ECR_AWS_ACCESS_KEY}")
-          BUILD_ARGS+=(--build-arg "AWS_SECRET_ACCESS_KEY=${ECR_AWS_SECRET_ACCESS_KEY}")
-          BUILD_ARGS+=(--build-arg "AWS_REGION=${ECR_AWS_REGION}")
-
           # Add the Maven and CURL authentication deetz
           for VAR in "${!CURL_@}" "${!MVN_GET_@}" ; do
               BUILD_ARGS+=(--build-arg "${VAR}=${!VAR}")
