@@ -107,7 +107,12 @@ env:
   DEVEL_KEEP_DAYS: 30
   SNAPSHOT_KEEP_DAYS: 30
 
-  REVISION_REGEX: "^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$"
+  RE_MAJOR: "(0|[1-9][0-9]*)"
+  RE_MINOR: "([.][0-9]+)"
+  RE_VERSION: "(${RE_MAJOR}${RE_MINOR}*)"
+  RE_PRERELEASE: "(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))"
+  RE_METADATA: "([+]([a-zA-Z0-9-]+))"
+  RE_FULL_REVISION: "^${RE_VERSION}${RE_PRERELEASE}?${RE_METADATA}?$"
 
 jobs:
   Compute-Revisions:
@@ -129,7 +134,7 @@ jobs:
           # proceed with the computation. We also validate it early
           # just to save computation time.
           if [ -n "${PARAM_REVISION}" ] ; then
-              if [[ "${PARAM_REVISION}" =~ ${REVISION_REGEX} ]] ; then
+              if [[ "${PARAM_REVISION}" =~ ${RE_FULL_REVISION} ]] ; then
                   echo -e "The REVISION parameter was given with the value [${PARAM_REVISION}]"
                   echo "value=[${PARAM_REVISION@Q}]" | tr ' ' ',' | tr "'" '"' >> "${GITHUB_OUTPUT}"
                   exit ${?}
@@ -140,7 +145,7 @@ jobs:
 
           # Same courtesy to the portal revision even though it can't be
           # processed dynamically as a matrix (this would be a BAD idea)
-          if [ -n "${PARAM_PORTAL}" ] && [[ ! "${PARAM_PORTAL}" =~ ${REVISION_REGEX} ]] ; then
+          if [ -n "${PARAM_PORTAL}" ] && [[ ! "${PARAM_PORTAL}" =~ ${RE_FULL_REVISION} ]] ; then
               echo "The FOIA Portal version is not valid: [${PARAM_PORTAL}]"
               exit 1
           fi
@@ -194,7 +199,7 @@ jobs:
               METHOD="$(basename "${METHOD}")"
               for REVISION in "${REVISIONS[@]}" ; do
                   # If this is a valid revision number, keep it and check the next one!
-                  [ -n "${REVISION}" ] && [[ "${REVISION}" =~ ${REVISION_REGEX} ]] && continue
+                  [ -n "${REVISION}" ] && [[ "${REVISION}" =~ ${RE_FULL_REVISION} ]] && continue
 
                   # This is an invalid revision number ... go kablooey!
                   echo "ERROR: Invalid revision number [${REVISION}] obtained via [${METHOD}]"
@@ -219,7 +224,7 @@ jobs:
           # See if this container build cares whether there's FIPS
           # anywhere or not ...
           #
-          egrep -q "^ARG[[:space:]]+FIPS(=.*)?[[:space:]]*$" Dockerfile && VARIANTS+=( "fips" )
+          grep -qE "^ARG\s+FIPS(=.*)?\s*$" Dockerfile && VARIANTS+=( "fips" )
 
           #
           # Make sure we have no duplicates
@@ -419,7 +424,7 @@ jobs:
 
                   source <(
                       perl -pe "s/\\\s*$//" Dockerfile | \
-                          egrep '^[[:space:]]*ARG[[:space:]]+[^=]+=' | \
+                          grep -E '^\s*ARG\s+[^=]+=' | \
                           sed -e "s;\${;\$\{${PREFIX};g" \
                               -e "s;\$\([^{]\);\$${PREFIX}\1;g" | \
                           sed -e "s;^\s*ARG\s;export ${PREFIX};g"
@@ -476,7 +481,7 @@ jobs:
           #     * More than 3 dot-separated components are allowed on the version number
           #
           # Otherwise, the rest is the same: same rules for pre-release tags and metadata tags.
-          if [[ ! "${REVISION}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
+          if [[ ! "${REVISION}" =~ ${RE_FULL_REVISION} ]] ; then
               echo "Revision number is not valid: [${REVISION}]"
               exit 1
           fi
@@ -498,7 +503,7 @@ jobs:
 
           # Do the same validation, but for the FOIA Portal version
           if [ -n "${PORTAL_VER}" ] ; then
-              if [[ ! "${PORTAL_VER}" =~ ^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$ ]] ; then
+              if [[ ! "${PORTAL_VER}" =~ ${RE_FULL_REVISION} ]] ; then
                   echo "The FOIA Portal version is not valid: [${PORTAL_VER}]"
                   exit 1
               fi
@@ -791,60 +796,145 @@ jobs:
               # since it's the LAST component to be taken into account, and
               # it most likely will never come into play since the timestamp
               # will almost assuredly NEVER coincide.
-              RE_REVISION_SELECTOR="^${REVISION_PREFIX}[^-]+_b[0-9]+-[1-9][0-9]{13}"
+              RE_REVISION_SELECTOR="${RE_MAJOR}${RE_MINOR}{2,}"
+              RE_MAJOR_SELECTOR="${MAJOR_REVISION}${RE_MINOR}{2,}"
+              RE_MINOR_SELECTOR="\Q${MINOR_REVISION}\E${RE_MINOR}+"
               JQ_FIND_IMAGE_TAGS='.imageDetails[] | select(has("imageTags")) | .imageTags[]'
 
-              # For re-use...
-              LATEST="${REVISION_PREFIX}latest"
-              LATEST_ADDED="false"
+              # Now let's figure out where this specific build version fits
+              # with respect to all the others. This needs to be done twice
+              # because the public versions may differ from the private ones
+              for ECR in ecr ecr-public ; do
+                  case "${ECR}" in
+                      ecr )
+                          QUERY="${IMAGE_URI}"
+                          REG="${ECR_REGISTRY_PRIVATE}"
+                          ;;
 
-              # First, check the private revisions, ingoring pre-release stuff
-              LATEST_PRV="$(
-                  (
-                      # We print out our latest revision so they get sorted properly
-                      # alongside all other revisions. This way the post-processing
-                      # sort+grep+head will yield the revision that should carry the
-                      # "latest" moniker
-                      echo "${EXACT_REVISION}"
-                      aws ecr describe-images --repository-name "${IMAGE_URI}" | \
-                          jq -r "${JQ_FIND_IMAGE_TAGS}"
-                  ) | \
-                  egrep "${RE_REVISION_SELECTOR}" | \
-                  sort --reverse --version-sort --unique | \
-                  head -1
-              )"
-              if [ "${LATEST_PRV}" == "${EXACT_REVISION}" ] ; then
-                  BUILD="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${LATEST}"
-                  echo "BUILDS+=(${BUILD@Q})" >> .env
-                  TAGS+=("${BUILD}")
-                  "${LATEST_ADDED}" || REVISIONS+=("${LATEST}")
-                  LATEST_ADDED="true"
-              fi
+                      ecr-public )
+                          "${PUSH_TO_PUBLIC}" || continue
+                          QUERY="${IMAGE_NAME}"
+                          REG="${ECR_REGISTRY_PUBLIC}"
+                          ;;
+                  esac
 
-              if "${PUSH_TO_PUBLIC}" ; then
-                  # Next, check the public one
-                  LATEST_PUB="$(
-                      (
-                          # We print out our latest revision so they get sorted properly
-                          # alongside all other revisions. This way the post-processing
-                          # sort+grep+head will yield the revision that should carry the
-                          # "latest" moniker
-                          echo "${EXACT_REVISION}"
-                          aws ecr-public describe-images --repository-name "${IMAGE_NAME}" | \
-                              jq -r "${JQ_FIND_IMAGE_TAGS}"
-                      ) | \
-                      egrep "${RE_REVISION_SELECTOR}" | \
-                      sort --reverse --version-sort --unique | \
-                      head -1
-                  )"
-                  if [ "${LATEST_PUB}" == "${EXACT_REVISION}" ] ; then
-                      BUILD="${ECR_REGISTRY_PUBLIC}/${IMAGE_URI}:${LATEST}"
+                  # Let's get the list of all the revisions, without the extra
+                  # markers that are actually noise at this specific juncture. We
+                  # do it like this so we only query the list twice.
+                  ALL_REVISIONS="$(
+                      aws "${ECR}" describe-images --repository-name "${QUERY}" | \
+                      jq -r "${JQ_FIND_IMAGE_TAGS}" | \
+                      grep -E "^${REVISION_PREFIX}${RE_REVISION_SELECTOR}$" | \
+                      sed -e "s;^${REVISION_PREFIX};;g" | \
+                      sort --version-sort --unique --reverse
+                  )" || ALL_REVISIONS=""
+
+                  # We have a possible maximum of 3 "latest" tags to create:
+                  #
+                  #     - the "overall" latest version (i.e. *.*.*)
+                  #       (this one will include the other two because if it's the
+                  #       overall latest version, it will also be the latest version
+                  #       for its major-minor group, as well as for its major group)
+                  IS_LATEST="false"
+
+                  #     - the major-minor latest (i.e. A.B.*)
+                  #       (it's the latest version in its major-minor group, but
+                  #       not necessarily in its major group. Example: given
+                  #       the versions 10.2.8, 10.3.1, and 10.4.15, if we try to
+                  #       add the version 10.3.2 it will be the latest in the
+                  #       10.3.* group, but NOT the 10.*.* group which will retain
+                  #       its own latest marker)
+                  IS_LATEST_MINOR="false"
+
+                  #     - the major latest (i.e. A.*.*)
+                  #       (it's the latest version within its major group. Given
+                  #       the versions 9.4.5, 9.7.8, and 9.15.2, if we try to
+                  #       add the version 9.16.0, then it will be the latest in
+                  #       the 9.*.* group, but NOT in the 9.15.*, 9.7.*, or 9.4.*
+                  #       groups, which will retain their own latest marker)
+                  IS_LATEST_MAJOR="false"
+
+                  # Ok, now let's see which level(s) of "latest" this version
+                  # is within this specific scope
+                  for V in FULL MAJOR MINOR ; do
+                      LATEST_ADDED="false"
+                      LATEST_MINOR_ADDED="false"
+                      LATEST_MAJOR_ADDED="false"
+
+                      case "${V}" in
+
+                          FULL )
+                              SELECTOR="${RE_REVISION_SELECTOR}"
+                              ;;
+
+                          MINOR )
+                              # If we're not publishing the major-minor revision, we skip this
+                              [ -n "${MINOR_REVISION}" ] || continue
+                              SELECTOR="${RE_MINOR_SELECTOR}"
+                              ;;
+
+                          MAJOR )
+                              # If we're not publishing the major revision, we skip this
+                              [ -n "${MAJOR_REVISION}" ] || continue
+                              SELECTOR="${RE_MAJOR_SELECTOR}"
+                              ;;
+                      esac
+
+                      # What's the latest full version for this scope?
+                      SCOPED_LATEST="$(
+                          ( echo "${ALL_REVISIONS}" ; echo "${REVISION_BASE_NUMBER}" ) | \
+                          grep -P "^${SELECTOR}$" | \
+                          sort --version-sort --unique --reverse | \
+                          head -1
+                      )"
+
+                      # This isn't the latest for this scipe
+                      [ "${SCOPED_LATEST}" == "${CURRENT}" ] || continue
+
+                      case "${V}" in
+                          # We're the latest version overall, for ALL available versions!
+                          # No need to look any further ...
+                          FULL ) IS_LATEST="true" ; break ;;
+
+                          # We're the latest version for this major-minor version group!
+                          MINOR ) IS_LATEST_MINOR="true" ;;
+
+                          # We're the latest version for this major version group!
+                          MAJOR ) IS_LATEST_MAJOR="true" ;;
+                      esac
+                  done
+
+                  if "${IS_LATEST}" ; then
+                      LATEST="${REVISION_PREFIX}latest"
+                      BUILD="${REG}/${IMAGE_URI}:${LATEST}"
                       echo "BUILDS+=(${BUILD@Q})" >> .env
                       TAGS+=("${BUILD}")
                       "${LATEST_ADDED}" || REVISIONS+=("${LATEST}")
                       LATEST_ADDED="true"
+
+                      # Enable the other two if necessary ...
+                      [ -n "${MINOR_REVISION}" ] && IS_LATEST_MINOR="true"
+                      [ -n "${MAJOR_REVISION}" ] && IS_LATEST_MAJOR="true"
                   fi
-              fi
+
+                  if "${IS_LATEST_MINOR}" ; then
+                      LATEST="${REVISION_PREFIX}${MINOR_REVISION}-latest"
+                      BUILD="${REG}/${IMAGE_URI}:${LATEST}"
+                      echo "BUILDS+=(${BUILD@Q})" >> .env
+                      TAGS+=("${BUILD}")
+                      "${LATEST_MINOR_ADDED}" || REVISIONS+=("${LATEST}")
+                      LATEST_MINOR_ADDED="true"
+                  fi
+
+                  if "${IS_LATEST_MAJOR}" ; then
+                      LATEST="${REVISION_PREFIX}${MAJOR_REVISION}-latest"
+                      BUILD="${REG}/${IMAGE_URI}:${LATEST}"
+                      echo "BUILDS+=(${BUILD@Q})" >> .env
+                      TAGS+=("${BUILD}")
+                      "${LATEST_MAJOR_ADDED}" || REVISIONS+=("${LATEST}")
+                      LATEST_MAJOR_ADDED="true"
+                  fi
+              done
           fi
 
           # We only build to a single tag b/c the security scanner pukes otherwise
