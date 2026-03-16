@@ -118,7 +118,7 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v6
 
-      - id: compute
+      - id: revisions
         name: Compute and validate the alternate revisions to be built
         env:
           PARAM_REVISION: ${{ inputs.revision }}
@@ -209,8 +209,30 @@ jobs:
           echo "value=[${REVISIONS[@]@Q}]" | tr ' ' ',' | tr "'" '"' >> "${GITHUB_OUTPUT}"
           exit 0
 
+      - id: variants
+        name: Compute and validate the alternate variants to be built
+        run: |
+
+          VARIANTS=( "main" )
+
+          #
+          # See if this container build cares whether there's FIPS
+          # anywhere or not ...
+          #
+          egrep -q "^ARG[[:space:]]+FIPS([^[A-Za-z0-9_]]|$)" Dockerfile && VARIANTS+=( "fips" )
+
+          #
+          # Make sure we have no duplicates
+          #
+          readarray -t VARIANTS < <(for n in "${VARIANTS[@]}" ; do echo "${n,,}" ; done | sort -u)
+
+          # This should yield the required output
+          echo "value=[${VARIANTS[@]@Q}]" | tr ' ' ',' | tr "'" '"' >> "${GITHUB_OUTPUT}"
+          exit 0
+
     outputs:
-      revisions: ${{ steps.compute.outputs.value }}
+      revisions: ${{ steps.revisions.outputs.value }}
+      variants: ${{ steps.variants.outputs.value }}
 
   ECR-Publishing:
     needs: [ "Compute-Revisions" ]
@@ -220,6 +242,7 @@ jobs:
       fail-fast: true
       matrix:
         revision: ${{ fromJSON(needs.Compute-Revisions.outputs.revisions) }}
+        variant: ${{ fromJSON(needs.Compute-Revisions.outputs.variants) }}
     steps:
       - name: Initialize the environment file for ${{ github.repository }}
         run: |
@@ -240,6 +263,7 @@ jobs:
       - name: Initialize the environment file
         env:
           MATRIX_REVISION: ${{ matrix.revision }}
+          MATRIX_VARIANT: ${{ matrix.variant }}
           PARAM_REVISION: ${{ inputs.revision }}
           PARAM_PORTAL: ${{ inputs.portal }}
         run: |
@@ -262,6 +286,9 @@ jobs:
 
           echo "export PARAM_PORTAL=${PARAM_PORTAL@Q}" >> .env
           echo "PARAM_PORTAL=${PARAM_PORTAL@Q}"
+
+          echo "export VARIANT=${MATRIX_VARIANT@Q}" >> .env
+          echo "VARIANT=${MATRIX_VARIANT@Q}"
 
       - name: Docker Login to Alfresco Quay.IO (if applicable)
         env:
@@ -348,10 +375,10 @@ jobs:
           echo "export PRODUCT_SUITE=${PRODUCT_SUITE@Q}" >> .env
           echo "PRODUCT_SUITE=${PRODUCT_SUITE@Q}"
 
-          FIPS=""
-          case "${GITHUB_REF_NAME}" in
-              *-fips ) FIPS="-fips" ;;
-          esac
+          #
+          # Enable FIPS if necessary
+          #
+          [ "${VARIANT}" == "fips" ] && FIPS="-fips" || FIPS=""
           echo "export FIPS=${FIPS@Q}" >> .env
           echo "FIPS=${FIPS@Q}"
 
@@ -867,8 +894,7 @@ jobs:
           ARTIFACT_IDENTIFIER=""
           case "${GITHUB_REF_NAME}" in
               main ) ;;
-              main-fips ) ARTIFACT_IDENTIFIER="-fips" ;;
-              develop | develop-fips | legacy | develop-legacy ) ARTIFACT_IDENTIFIER=".${GITHUB_REF_NAME}" ;;
+              develop | legacy | develop-legacy ) ARTIFACT_IDENTIFIER=".${GITHUB_REF_NAME}" ;;
 
               # We only do vulnerability scanning for main, develop, and the FIPS branches
               * ) SCAN_COMP="false" ; SCAN_VULN="false" ;;
@@ -877,6 +903,9 @@ jobs:
           # If we're running builds for multiple dynamic revisions,
           # we have to append the revision to the artifact name
           [ "${MATRIX_REVISION}" == "*" ] || ARTIFACT_IDENTIFIER+="-${MATRIX_REVISION}"
+
+          # If we're building a non-main variant, append the variant
+          [ "${VARIANT}" != "main" ] && ARTIFACT_IDENTIFIER+="-${VARIANT}"
 
           SCAN_DIR="$(readlink -f .)/security-scan"
 
