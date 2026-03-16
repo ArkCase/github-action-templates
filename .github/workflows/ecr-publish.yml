@@ -253,7 +253,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-access-key-id: ${{ secrets.ECR_AWS_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
@@ -328,13 +328,13 @@ jobs:
         # ECR_REGISTRY_PRIVATE value is computed here
       - name: Login to Amazon ECR (Private)
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
+        uses: aws-actions/amazon-ecr-login@v2
 
         # The AWS login needs to happen before the build b/c the
         # ECR_REGISTRY_PUBLIC value is computed here
       - name: Login to Amazon ECR (Public)
         id: login-ecr-public
-        uses: aws-actions/amazon-ecr-login@v1
+        uses: aws-actions/amazon-ecr-login@v2
         with:
           registry-type: public
 
@@ -996,7 +996,7 @@ jobs:
 
       - name: Upload the STIG compliance report to the GitHub Artifacts tab
         if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ env.COMP_REPORT_BASE }}
           path: ${{ env.COMP_REPORT_PATTERN }}
@@ -1005,7 +1005,7 @@ jobs:
       - name: Upload the STIG compliance report to the GitHub Security tab
         if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: ${{ env.COMP_REPORT_SARIF_SOURCE }}
           category: stig-compliance
@@ -1063,7 +1063,7 @@ jobs:
 
       - name: Upload the vulnerabilities reports to the GitHub artifacts tab
         if: ${{ hashFiles(env.VULN_REPORT_JSON_SOURCE) != '' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ env.VULN_REPORT_BASE }}
           path: ${{ env.VULN_REPORT_PATTERN }}
@@ -1072,7 +1072,7 @@ jobs:
       - name: Upload the vulnerabilities report to the GitHub Security tab
         if: ${{ hashFiles(env.VULN_REPORT_SARIF_SOURCE) != '' }}
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: ${{ env.VULN_REPORT_SARIF_SOURCE }}
           category: vulnerabilities
