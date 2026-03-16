@@ -790,15 +790,21 @@ jobs:
               # version precedence rules laid out above
               #
 
+              # This is important: the number of dots will help us figure out
+              # the regulare expressions to use below when seeking out the full
+              # version numbers, vs. just the partial ones
+              DOTS="$(echo "${REVISION_BASE_NUMBER}" | fgrep -o "." | wc -l)"
+
               # Since we know we won't have any pre-release stuff, we can
               # construct this selector regex to not allow any pre-release
               # information on the tags. We don't really care about metadata
               # since it's the LAST component to be taken into account, and
               # it most likely will never come into play since the timestamp
               # will almost assuredly NEVER coincide.
-              RE_REVISION_SELECTOR="${RE_MAJOR}${RE_MINOR}{2,}"
-              RE_MAJOR_SELECTOR="${MAJOR_REVISION}${RE_MINOR}{2,}"
-              RE_MINOR_SELECTOR="\Q${MINOR_REVISION}\E${RE_MINOR}+"
+              RE_REVISION_SELECTOR="${RE_MAJOR}${RE_MINOR}{${DOTS},}"
+              RE_MAJOR_SELECTOR="${MAJOR_REVISION}${RE_MINOR}{${DOTS},}"
+              RE_MINOR_SELECTOR="\Q${MINOR_REVISION}\E"
+              [ ${DOTS} -ge 2 ] && RE_MINOR_SELECTOR+="${RE_MINOR}+"
               JQ_FIND_IMAGE_TAGS='.imageDetails[] | select(has("imageTags")) | .imageTags[]'
 
               # Now let's figure out where this specific build version fits
