@@ -347,6 +347,15 @@ jobs:
 
           echo "export PRODUCT_SUITE=${PRODUCT_SUITE@Q}" >> .env
           echo "PRODUCT_SUITE=${PRODUCT_SUITE@Q}"
+
+          FIPS=""
+          case "${GITHUB_REF_NAME}" in
+              *-fips ) FIPS="-fips" ;;
+          esac
+          echo "export FIPS=${FIPS@Q}" >> .env
+          echo "FIPS=${FIPS@Q}"
+
+          [ -n "${FIPS}" ] && IMAGE_NAME+="${FIPS}"
           echo "export IMAGE_NAME=${IMAGE_NAME@Q}" >> .env
           echo "IMAGE_NAME=${IMAGE_NAME@Q}"
 
@@ -596,6 +605,7 @@ jobs:
 
           # Set any build arguments with private values
           export BUILD_ARGS=()
+          BUILD_ARGS+=(--build-arg "FIPS=${FIPS}")
 
           # Always use the base version for this ...
           BUILD_ARGS+=(--build-arg "VER=${REVISION}")
@@ -857,9 +867,10 @@ jobs:
           ARTIFACT_IDENTIFIER=""
           case "${GITHUB_REF_NAME}" in
               main ) ;;
-              develop | legacy | develop-legacy ) ARTIFACT_IDENTIFIER=".${GITHUB_REF_NAME}" ;;
+              main-fips ) ARTIFACT_IDENTIFIER="-fips" ;;
+              develop | develop-fips | legacy | develop-legacy ) ARTIFACT_IDENTIFIER=".${GITHUB_REF_NAME}" ;;
 
-              # We only do vulnerability scanning for main and develop
+              # We only do vulnerability scanning for main, develop, and the FIPS branches
               * ) SCAN_COMP="false" ; SCAN_VULN="false" ;;
           esac
 
