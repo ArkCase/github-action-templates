@@ -219,7 +219,7 @@ jobs:
           # See if this container build cares whether there's FIPS
           # anywhere or not ...
           #
-          egrep -q "^ARG[[:space:]]+FIPS([^[A-Za-z0-9_]]|$)" Dockerfile && VARIANTS+=( "fips" )
+          egrep -q "^ARG[[:space:]]+FIPS(=.*)?[[:space:]]*$" Dockerfile && VARIANTS+=( "fips" )
 
           #
           # Make sure we have no duplicates
