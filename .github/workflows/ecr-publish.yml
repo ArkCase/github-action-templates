@@ -482,7 +482,7 @@ jobs:
           #
           # Otherwise, the rest is the same: same rules for pre-release tags and metadata tags.
           if [[ ! "${REVISION}" =~ ${RE_FULL_REVISION} ]] ; then
-              echo "Revision number is not valid: [${REVISION}]"
+              echo "Revision number is not valid: [${REVISION}] ( /${RE_FULL_REVISION}/ )"
               exit 1
           fi
 
