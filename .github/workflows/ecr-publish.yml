@@ -148,7 +148,7 @@ jobs:
           OUT=""
           METHOD=""
           FILE_NAME=".alt-revisions"
-          FILE="${GITHUB_WORKSPACE}/${FILE_NAME}
+          FILE="${GITHUB_WORKSPACE}/${FILE_NAME}"
           SCRIPT_NAME="${FILE_NAME}.dynamic"
           SCRIPT="${GITHUB_WORKSPACE}/${SCRIPT_NAME}"
           if [ -f "${SCRIPT}" ] ; then
