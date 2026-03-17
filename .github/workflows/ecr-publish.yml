@@ -817,17 +817,22 @@ jobs:
               # with respect to all the others. This needs to be done twice
               # because the public versions may differ from the private ones
               for ECR in ecr ecr-public ; do
+                  LABEL=""
                   case "${ECR}" in
                       ecr )
+                          LABEL="private"
                           QUERY="${IMAGE_URI}"
                           REG="${ECR_REGISTRY_PRIVATE}"
                           ;;
 
                       ecr-public )
                           "${PUSH_TO_PUBLIC}" || continue
+                          LABEL="public"
                           QUERY="${IMAGE_NAME}"
                           REG="${ECR_REGISTRY_PUBLIC}"
                           ;;
+
+                      * ) break ;;
                   esac
 
                   # Let's get the list of all the revisions, without the extra
@@ -900,8 +905,8 @@ jobs:
                           head -1
                       )"
 
-                      # This isn't the latest for this scipe
-                      [ "${SCOPED_LATEST}" == "${CURRENT}" ] || continue
+                      # This isn't the latest for this scope
+                      [ "${SCOPED_LATEST}" == "${REVISION_BASE_NUMBER}" ] || continue
 
                       case "${V}" in
                           # We're the latest version overall, for ALL available versions!
@@ -917,6 +922,7 @@ jobs:
                   done
 
                   if "${IS_LATEST}" ; then
+                      echo "Found latest ${LABEL} revision: ${REVISION_BASE_NUMBER}"
                       LATEST="${REVISION_PREFIX}latest"
                       BUILD="${REG}/${IMAGE_URI}:${LATEST}"
                       echo "BUILDS+=(${BUILD@Q})" >> .env
@@ -930,6 +936,7 @@ jobs:
                   fi
 
                   if "${IS_LATEST_MINOR}" ; then
+                      echo "Found latest ${LABEL} minor revision: ${MINOR_REVISION}"
                       LATEST="${REVISION_PREFIX}${MINOR_REVISION}-latest"
                       BUILD="${REG}/${IMAGE_URI}:${LATEST}"
                       echo "BUILDS+=(${BUILD@Q})" >> .env
@@ -939,6 +946,7 @@ jobs:
                   fi
 
                   if "${IS_LATEST_MAJOR}" ; then
+                      echo "Found latest ${LABEL} major revision: ${MAJOR_REVISION}"
                       LATEST="${REVISION_PREFIX}${MAJOR_REVISION}-latest"
                       BUILD="${REG}/${IMAGE_URI}:${LATEST}"
                       echo "BUILDS+=(${BUILD@Q})" >> .env
