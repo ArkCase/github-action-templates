@@ -352,7 +352,7 @@ jobs:
                       echo -e "ERROR: The build arguments script [${SCRIPT_NAME}] is not executable"
                       exit 1
                   fi
-                  BUILD_ARGS="$( "${SCRIPT}" )" || RC=${?}
+                  BUILD_ARGS="$( set -o allexport ; . "${ARGS_TEMP}" ; "${SCRIPT}" )" || RC=${?}
                   if [ ${RC} -ne 0 ] ; then
                       echo -e "ERROR: Failed to compute the build arguments from [${SCRIPT_NAME}] (rc=${RC}): ${BUILD_ARGS}"
                       exit 1
@@ -384,13 +384,22 @@ jobs:
               # --build-arg ${KEY}=${VALUE} mechanism.
               while read VAR ; do
                   [[ "${VAR}" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(.*)[[:space:]]*$ ]] || continue
-                  KEY="${BASH_REMATCH[1]}"
+                  KEY="BUILD_ARG_${BASH_REMATCH[1]}"
                   VALUE="${BASH_REMATCH[2]}"
-                  echo "BUILD_ARG_${KEY}=${VALUE@Q}"
+
+                  # Remove prior values, and buffer them
+                  PREV="$(grep -v "^${KEY}=" "${ARGS_TEMP}")"
+                  (
+                      # Output the old values without the new value
+                      echo "${PREV}"
+                      # Output the new value
+                      echo "${KEY}=${VALUE@Q}"
+                  ) | sort > "${ARGS_TEMP}"
               done <<< "${BUILD_ARGS}"
-          done > "${ARGS_TEMP}"
+          done
 
           # Now we output the variables, only keeping the last definition
+          # (this may be unnecessary, but is a good safety measure anyway)
           while read VAR ; do
               VAL="$(grep "^${VAR}=" "${ARGS_TEMP}" | tail -1)"
               echo "export ${VAL}" >> .env
