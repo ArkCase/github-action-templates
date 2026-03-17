@@ -147,28 +147,45 @@ jobs:
 
           OUT=""
           METHOD=""
-          SCRIPT="${GITHUB_WORKSPACE}/.compute-alt-revisions"
-          LIST_FILE="${GITHUB_WORKSPACE}/.alt-revisions"
+          FILE_NAME=".alt-revisions"
+          FILE="${GITHUB_WORKSPACE}/${FILE_NAME}
+          SCRIPT_NAME="${FILE_NAME}.dynamic"
+          SCRIPT="${GITHUB_WORKSPACE}/${SCRIPT_NAME}"
           if [ -f "${SCRIPT}" ] ; then
-              # If there's a script called ".compute-alt-revisions" in the
+              # If there's a script called ".alt-revisions.dynamic" in the
               # root checkout directory, then we run that and its STDOUT
               # becomes the result, and is processed as if it were the content
               # of the ".alt-revisions" file (see below).
+              if [ ! -x "${SCRIPT}" ] ; then
+                  echo "ERROR: The script [${SCRIPT_NAME}] is not executable"
+                  exit 1
+              fi
+
               RC=0
               OUT="$( "${SCRIPT}" )" || RC=${?}
               if [ ${RC} -ne 0 ] ; then
-                  echo "ERROR: Failed to compute the alternate revisions using ${SCRIPT} (rc=${?}): ${OUT}"
+                  echo "ERROR: Failed to compute the alternate revisions using [${SCRIPT_NAME}] (rc=${?}): ${OUT}"
                   exit ${RC}
               fi
               METHOD="${SCRIPT}"
-              echo -e "The script ${SCRIPT} produced the following revisions:\n${OUT}"
-          elif [ -f "${LIST_FILE}" ] ; then
+              echo -e "The script [${SCRIPT_NAME}] produced the following (raw) revisions:\n${OUT}"
+          elif [ -f "${FILE}" ] ; then
               # If there's no script to do the computation, but there's a
               # file called ".alt-revisions" then each line of the file will be
               # examined.
-              OUT="$( cat "${LIST_FILE}" )"
-              METHOD="${LIST_FILE}"
-              echo -e "The static file ${LIST_FILE} produced the following revisions:\n${OUT}"
+              if [ ! -r "${FILE}" ] ; then
+                  echo "ERROR: The file [${FILE_NAME}] is not readable"
+                  exit 1
+              fi
+
+              RC=0
+              OUT="$(<"${FILE}")" || RC=${?}
+              if [ ${RC} -ne 0 ] ; then
+                  echo "ERROR: Failed to read the alternate revisions from [${FILE_NAME}] (rc=${?})"
+                  exit ${RC}
+              fi
+              METHOD="${FILE}"
+              echo -e "The static file [${FILE_NAME}] produced the following (raw) revisions:\n${OUT}"
           else
               echo "No dynamic revisions were computed - will use the default algorithm!"
           fi
@@ -289,6 +306,61 @@ jobs:
 
           echo "export VARIANT=${MATRIX_VARIANT@Q}" >> .env
           echo "VARIANT=${MATRIX_VARIANT@Q}"
+
+          REVISION_SUFFIX=""
+          [ "${MATRIX_REVISION}" == "*" ] || REVISION_SUFFIX="-${MATRIX_REVISION}"
+
+          # See if we have a revision-specific file with build arguments to provide
+          ARGS_DIR="${GITHUB_WORKSPACE}/.args"
+          SCRIPT_NAME="${VARIANT}/dynamic${REVISION_SUFFIX}"
+          SCRIPT="${ARGS_DIR}/${SCRIPT_NAME}"
+          FILE_NAME="${VARIANT}/static${REVISION_SUFFIX}"
+          FILE="${ARGS_DIR}/${FILE_NAME}"
+
+          BUILD_ARGS=""
+          RC=0
+          if [ -f "${SCRIPT}" ] ; then
+              if [ -x "${SCRIPT}" ] ; then
+                  echo -e "ERROR: The build arguments script [${SCRIPT_NAME}] is not executable"
+                  exit 1
+              fi
+              BUILD_ARGS="$( "${SCRIPT}" )" || RC=${?}
+              if [ ${RC} -ne 0 ] ; then
+                  echo -e "ERROR: Failed to compute the build arguments from [${SCRIPT_NAME}] (rc=${RC}): ${BUILD_ARGS}"
+                  exit 1
+              fi
+              echo -e "The script [${SCRIPT_NAME}] produced the following (raw) build arguments:"
+              echo -e "--------------------------------------------------------------------------------"
+              echo -e "${BUILD_ARGS}"
+              echo -e "--------------------------------------------------------------------------------"
+          elif [ -f "${FILE}" ] ; then
+              if [ -x "${FILE}" ] ; then
+                  echo -e "ERROR: The build arguments file [${FILE_NAME}] is not readable"
+                  exit 1
+              fi
+              BUILD_ARGS="$(<"${FILE}")" || RC=${?}
+              if [ ${RC} -ne 0 ] ; then
+                  echo -e "ERROR: Failed to read the build arguments from [${FILE_NAME}] (rc=${RC})"
+                  exit 1
+              fi
+              echo -e "The file [${FILE_NAME}] produced the following (raw) build arguments:"
+              echo -e "--------------------------------------------------------------------------------"
+              echo -e "${BUILD_ARGS}"
+              echo -e "--------------------------------------------------------------------------------"
+          fi
+
+          if [ -n "${BUILD_ARGS}" ] ; then
+              # The output must be a list of key-value pairs. Each key will be renamed
+              # as BUILD_ARG_${KEY} and will be set as a build argument via docker's
+              # --build-arg ${KEY}=${VALUE} mechanism.
+              while read VAR ; do
+                  [[ "${VAR}" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=[[:space:]]*(.*)[[:space:]]*$ ]] || continue
+                  KEY="${BASH_REMATCH[1]}"
+                  VALUE="${BASH_REMATCH[2]}"
+                  echo "export BUILD_ARG_${KEY}=${VALUE@Q}" >> .env
+                  echo "BUILD_ARG_${KEY}=${VALUE@Q}"
+              done <<< "${BUILD_ARGS}"
+          fi
 
       - name: Docker Login to Alfresco Quay.IO (if applicable)
         env:
@@ -650,6 +722,13 @@ jobs:
           "${PUSH_TO_PUBLIC}" && BASE_REGISTRY="${ECR_REGISTRY_PUBLIC}"
           BUILD_ARGS+=(--build-arg "BASE_REGISTRY=${BASE_REGISTRY}")
 
+          # Apply the predefined BUILD_ARG_* arguments
+          for VAR in "${!BUILD_ARG_@}" ; do
+              [[ "${VAR}" =~ ^BUILD_ARG_(.+)$ ]] || continue
+              ARG="${BASH_REMATCH[1]}"
+              BUILD_ARGS+=(--build-arg "${ARG}=${!VAR}")
+          done
+
           SECRETS_DIR="$(mktemp -d --tmpdir="$(readlink -f .)" ".secrets-XXXXXX.tmp")"
           mkdir -p "${SECRETS_DIR}"
 
@@ -678,14 +757,6 @@ jobs:
           done |& sort &> "${MVN_GET_SECRETS}"
           BUILD_ARGS+=(--secret id=mvn_get_auth,src="${MVN_GET_SECRETS}")
           sha256sum "${MVN_GET_SECRETS}"
-
-          # TODO: Remove these --build-arg declarations when all container images are
-          # modified to use secrets vs. envvars/parameters for their credentials
-          # Add the Maven and CURL authentication deetz
-          for VAR in "${!CURL_@}" "${!MVN_GET_@}" ; do
-              BUILD_ARGS+=(--build-arg "${VAR}=${!VAR}")
-          done
-          # End removable section
 
           # Mark as legacy if needed
           [ "${LEGACY}" == "true" ] && BUILD_ARGS+=(--label "LEGACY=${LEGACY}")
