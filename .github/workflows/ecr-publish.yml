@@ -1101,12 +1101,12 @@ jobs:
           # Once the build succeeds, we create the required tags as appropriate
           if [ -z "${REVISION_PRERELEASE}" ] ; then
               SCAN_REPORT_RETENTION_DAYS="90"
-              PREFIX="release"
+              TAG_PREFIX="release"
           elif "${REVISION_SNAPSHOT}" ; then
-              PREFIX="snapshot"
+              TAG_PREFIX="snapshot"
               SCAN_REPORT_RETENTION_DAYS="7"
           else
-              PREFIX="test"
+              TAG_PREFIX="test"
               SCAN_REPORT_RETENTION_DAYS="30"
           fi
 
@@ -1114,7 +1114,7 @@ jobs:
           echo "Creating Git tags for: ${REVISIONS[@]}"
           for R in "${REVISIONS[@]}" ; do
               # Tags for GIT must be the *real* revision, with "+" instead of "_"
-              git tag --force "${PREFIX}/${R//_/+}"
+              git tag --force "${TAG_PREFIX}/${R//_/+}"
           done
 
           REPORT_TARGET_PATH="${IMAGE_URI}/${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}/b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
