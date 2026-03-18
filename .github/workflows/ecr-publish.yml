@@ -1110,6 +1110,8 @@ jobs:
               SCAN_REPORT_RETENTION_DAYS="30"
           fi
 
+          [ "${VARIANT}" != "main" ] && TAG_PREFIX+="/${VARIANT}"
+
           # If we want to tag the repository, do so! Clobber any existing tags!
           echo "Creating Git tags for: ${REVISIONS[@]}"
           for R in "${REVISIONS[@]}" ; do
