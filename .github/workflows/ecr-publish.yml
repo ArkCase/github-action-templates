@@ -964,6 +964,8 @@ jobs:
                       sort --version-sort --unique --reverse
                   )" || ALL_REVISIONS=""
 
+                  echo -e "Found these revisions:\n${ALL_REVISIONS}"
+
                   # We have a possible maximum of 3 "latest" tags to create:
                   #
                   #     - the "overall" latest version (i.e. *.*.*)
