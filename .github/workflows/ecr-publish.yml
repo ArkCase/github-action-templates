@@ -471,10 +471,22 @@ jobs:
           # TODO: CHECK THE DOCKERFILE FOR A REQUEST (ARG) TO KEEP THE BUILD PRIVATE
           export PRIVATE="$(gh repo view --json isPrivate --jq .isPrivate)"
           export VISIBILITY="private"
+          export FIPS=""
+
+          #
+          # The fips-enabled stuff is kept private
+          #
+          if [ "${VARIANT}" == "fips" ] ; then
+              FIPS="-fips"
+              PRIVATE="true"
+          fi
           "${PRIVATE}" || VISIBILITY="public"
 
           echo "export VISIBILITY=${VISIBILITY@Q}" >> .env
           echo "VISIBILITY=${VISIBILITY@Q}"
+
+          echo "export FIPS=${FIPS@Q}" >> .env
+          echo "FIPS=${FIPS@Q}"
 
           # Split into an array of parts, making sure that double slashes, if present, are condensed into one
           # Also remove leading and trailing slashes, for safety. Also, fold it to lowercase
@@ -493,13 +505,6 @@ jobs:
 
           echo "export PRODUCT_SUITE=${PRODUCT_SUITE@Q}" >> .env
           echo "PRODUCT_SUITE=${PRODUCT_SUITE@Q}"
-
-          #
-          # Enable FIPS if necessary
-          #
-          [ "${VARIANT}" == "fips" ] && FIPS="-fips" || FIPS=""
-          echo "export FIPS=${FIPS@Q}" >> .env
-          echo "FIPS=${FIPS@Q}"
 
           [ -n "${FIPS}" ] && IMAGE_NAME+="${FIPS}"
           echo "export IMAGE_NAME=${IMAGE_NAME@Q}" >> .env
