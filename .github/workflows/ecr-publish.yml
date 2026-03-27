@@ -105,7 +105,7 @@ env:
   MAXIMIZE_BUILD_SPACE: ${{ inputs.maximize-build-space }}
 
   DEVEL_KEEP_DAYS: 30
-  SNAPSHOT_KEEP_DAYS: 30
+  SNAPSHOT_KEEP_DAYS: 15
 
   RE_FULL_REVISION: "^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$"
 
@@ -1503,11 +1503,11 @@ jobs:
               },
               {
                 "rulePriority": 200,
-                "description": "Keep only the top-level SNAPSHOTS built in the past ${SNAPSHOT_KEEP_DAYS} days",
+                "description": "Keep only the top-level SNAPSHOTS built in the past ${SNAPSHOT_KEEP_DAYS} days since it was last pulled",
                 "selection": {
                   "tagStatus": "tagged",
                   "tagPatternList": [ "*-SNAPSHOT" ],
-                  "countType": "sinceImagePushed",
+                  "countType": "sinceImagePulled",
                   "countUnit": "days",
                   "countNumber": ${SNAPSHOT_KEEP_DAYS}
                 },
@@ -1517,11 +1517,11 @@ jobs:
               },
               {
                 "rulePriority": 300,
-                "description": "Keep only fresh-built SNAPSHOT tags that AREN'T the top-level SNAPSHOTs, pushed in the last 5 days",
+                "description": "Keep only fresh-built SNAPSHOT tags that AREN'T the top-level SNAPSHOTs, for 5 days since they were last pulled",
                 "selection": {
                   "tagStatus": "tagged",
                   "tagPatternList": [ "*-SNAPSHOT_b*" ],
-                  "countType": "sinceImagePushed",
+                  "countType": "sinceImagePulled",
                   "countUnit": "days",
                   "countNumber": 5
                 },
@@ -1531,11 +1531,11 @@ jobs:
               },
               {
                 "rulePriority": 400,
-                "description": "Keep only fresh-built devel-* tags that AREN'T the top-level SNAPSHOTs, pushed in the last ${DEVEL_KEEP_DAYS} days",
+                "description": "Keep only fresh-built devel-* tags that AREN'T the top-level SNAPSHOTs, for ${DEVEL_KEEP_DAYS} days since they were last pulled",
                 "selection": {
                   "tagStatus": "tagged",
                   "tagPatternList": [ "devel-*" ],
-                  "countType": "sinceImagePushed",
+                  "countType": "sinceImagePulled",
                   "countUnit": "days",
                   "countNumber": ${DEVEL_KEEP_DAYS}
                 },
