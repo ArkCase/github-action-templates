@@ -785,14 +785,20 @@ jobs:
           mkdir -p "${SECRETS_DIR}"
 
           # Next, add all the stuff S3 will need to pull crap
-          AWS_SECRETS="${SECRETS_DIR}/aws"
+          AWS_CONF="${SECRETS_DIR}/aws_conf"
           (
-              echo "export AWS_ACCESS_KEY_ID=${ECR_AWS_ACCESS_KEY@Q}"
-              echo "export AWS_SECRET_ACCESS_KEY=${ECR_AWS_SECRET_ACCESS_KEY@Q}"
-              echo "export AWS_REGION=${ECR_AWS_REGION@Q}"
-          ) |& sort &> "${AWS_SECRETS}"
-          BUILD_ARGS+=(--secret id=aws_auth,src="${AWS_SECRETS}")
-          sha256sum "${AWS_SECRETS}"
+              echo "[default]"
+              echo "region=${ECR_AWS_REGION}"
+          ) &> "${AWS_CONF}"
+          BUILD_ARGS+=(--secret id=aws_conf,src="${AWS_CONF}")
+
+          AWS_AUTH="${SECRETS_DIR}/aws_auth"
+          (
+              echo "[default]"
+              echo "aws_access_key_id=${ECR_AWS_ACCESS_KEY}"
+              echo "aws_secret_access_key=${ECR_AWS_SECRET_ACCESS_KEY}"
+          ) |& sort &> "${AWS_AUTH}"
+          BUILD_ARGS+=(--secret id=aws_auth,src="${AWS_AUTH}")
 
           # Add the Curl authentication deetz
           CURL_SECRETS="${SECRETS_DIR}/curl"
