@@ -785,16 +785,17 @@ jobs:
           mkdir -p "${SECRETS_DIR}"
 
           # Next, add all the stuff S3 will need to pull crap
+          AWS_PROFILE="armedia-docker-build"
           AWS_CONF="${SECRETS_DIR}/aws_conf"
           (
-              echo "[default]"
+              echo "[${AWS_PROFILE}]"
               echo "region=${ECR_AWS_REGION}"
           ) &> "${AWS_CONF}"
           BUILD_ARGS+=(--secret id=aws_conf,src="${AWS_CONF}")
 
           AWS_AUTH="${SECRETS_DIR}/aws_auth"
           (
-              echo "[default]"
+              echo "[${AWS_PROFILE}]"
               echo "aws_access_key_id=${ECR_AWS_ACCESS_KEY}"
               echo "aws_secret_access_key=${ECR_AWS_SECRET_ACCESS_KEY}"
           ) |& sort &> "${AWS_AUTH}"
