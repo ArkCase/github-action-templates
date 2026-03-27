@@ -788,7 +788,7 @@ jobs:
           AWS_PROFILE="armedia-docker-build"
           AWS_CONF="${SECRETS_DIR}/aws_conf"
           (
-              echo "[${AWS_PROFILE}]"
+              echo "[profile ${AWS_PROFILE}]"
               echo "region=${ECR_AWS_REGION}"
           ) &> "${AWS_CONF}"
           BUILD_ARGS+=(--secret id=aws_conf,src="${AWS_CONF}")
