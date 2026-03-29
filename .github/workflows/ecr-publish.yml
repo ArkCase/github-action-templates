@@ -118,13 +118,6 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v6
 
-      - id: exploration
-        name: A little exploration
-        run: |
-          readlink -f .
-          find . -type f | sort
-          env
-
       - id: revisions
         name: Compute and validate the alternate revisions to be built
         env:
