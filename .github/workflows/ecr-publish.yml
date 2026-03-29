@@ -415,19 +415,25 @@ jobs:
 
       - name: Docker Login to Alfresco Quay.IO (if applicable)
         uses: docker/login-action@v4
-        if: ${{ secrets.ALF_QUAY_IO_USERNAME != '' && secrets.ALF_QUAY_IO_PASSWORD != '' }}
+        env:
+          USERNAME: ${{ secrets.ALF_QUAY_IO_USERNAME }}
+          PASSWORD: ${{ secrets.ALF_QUAY_IO_PASSWORD }}
+        if: ${{ env.USERNAME != '' && env.PASSWORD != '' }}
         with:
           registry: "quay.io"
-          username: ${{ secrets.ALF_QUAY_IO_USERNAME }}
-          password: ${{ secrets.ALF_QUAY_IO_PASSWORD }}
+          username: ${{ env.USERNAME }}
+          password: ${{ env.PASSWORD }}
 
       - name: Docker Login to Chainguard (if applicable)
         uses: docker/login-action@v4
-        if: ${{ secrets.CHAINGUARD_USERNAME != '' && secrets.CHAINGUARD_PASSWORD != '' }}
+        env:
+          USERNAME: ${{ secrets.CHAINGUARD_USERNAME }}
+          PASSWORD: ${{ secrets.CHAINGUARD_PASSWORD }}
+        if: ${{ env.USERNAME != '' && env.PASSWORD != '' }}
         with:
           registry: "cgr.dev"
-          username: ${{ secrets.CHAINGUARD_USERNAME }}
-          password: ${{ secrets.CHAINGUARD_PASSWORD }}
+          username: ${{ env.USERNAME }}
+          password: ${{ env.PASSWORD }}
 
         # The AWS login needs to happen before the build b/c the
         # ECR_REGISTRY_PRIVATE value is computed here
