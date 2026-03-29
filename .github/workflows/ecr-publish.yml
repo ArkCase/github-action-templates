@@ -121,6 +121,7 @@ jobs:
       - id: exploration
         name: A little exploration
         run: |
+          readlink -f .
           find . -type f | sort
 
       - id: revisions
