@@ -318,10 +318,13 @@ jobs:
           echo "export PARAM_PORTAL=${PARAM_PORTAL@Q}" >> .env
           echo "PARAM_PORTAL=${PARAM_PORTAL@Q}"
 
-          echo "export VARIANT=${MATRIX_VARIANT@Q}" >> .env
-          echo "VARIANT=${MATRIX_VARIANT@Q}"
+          export VARIANT="${MATRIX_VARIANT}"
+          echo "export VARIANT=${VARIANT@Q}" >> .env
+          echo "VARIANT=${VARIANT@Q}"
 
-          [ "${MATRIX_REVISION}" == "*" ] && REVISION_SUFFIX="all" || REVISION_SUFFIX="${MATRIX_REVISION}"
+          [ "${MATRIX_REVISION}" == "*" ] \
+              && REVISION_SUFFIX="all" \
+              || REVISION_SUFFIX="${MATRIX_REVISION}"
 
           # See if we have a revision-specific file with build arguments to provide
 
@@ -331,7 +334,8 @@ jobs:
               "all/all"
               "${VARIANT}/all"
           )
-          [ -n "${REVISION_SUFFIX}" ] && CANDIDATES+=( "all/${REVISION_SUFFIX}" "${VARIANT}/${REVISION_SUFFIX}" )
+          [ -n "${REVISION_SUFFIX}" ] && [ "${REVISION_SUFFIX}" != "all" ] && \
+              CANDIDATES+=( "all/${REVISION_SUFFIX}" "${VARIANT}/${REVISION_SUFFIX}" )
 
           ARGS_TEMP="$(mktemp --tmpdir="$(readlink -f .)" ".build-args-XXXXXX.tmp")"
           ARGS_DIR="${GITHUB_WORKSPACE}/.build-args"
