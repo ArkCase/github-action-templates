@@ -410,38 +410,20 @@ jobs:
           rm -rf "${ARGS_TEMP}"
 
       - name: Docker Login to Alfresco Quay.IO (if applicable)
-        env:
-          ALF_QUAY_IO_USERNAME: ${{ secrets.ALF_QUAY_IO_USERNAME }}
-          ALF_QUAY_IO_PASSWORD: ${{ secrets.ALF_QUAY_IO_PASSWORD }}
-        run: |
-          source .env
-          cat .env
-
-          if [ -v ALF_QUAY_IO_USERNAME ] && [ -v ALF_QUAY_IO_PASSWORD ] && [ -n "${ALF_QUAY_IO_USERNAME}" ] && [ -n "${ALF_QUAY_IO_PASSWORD}" ] ; then
-              docker login -u "${ALF_QUAY_IO_USERNAME}" -p "${ALF_QUAY_IO_PASSWORD}" quay.io
-          else
-              [ -v ALF_QUAY_IO_USERNAME ] || [ -v ALF_QUAY_IO_PASSWORD ] && echo "These are the quay.io credentials given (sha256sum):"
-              [ -v ALF_QUAY_IO_USERNAME ] && echo -e "\tUSERNAME: [$(echo -n "${ALF_QUAY_IO_USERNAME}" | sha256sum | awk '{ print $1 }')]"
-              [ -v ALF_QUAY_IO_PASSWORD ] && echo -e "\tPASSWORD: [$(echo -n "${ALF_QUAY_IO_PASSWORD}" | sha256sum | awk '{ print $1 }')]"
-              echo "The quay.io credentials were insufficient. Will not authenticate."
-          fi
+        uses: docker/login-action@v4
+        if: ${{ secrets.ALF_QUAY_IO_USERNAME != '' && secrets.ALF_QUAY_IO_PASSWORD != '' }}
+        with:
+          registry: "quay.io"
+          username: ${{ secrets.ALF_QUAY_IO_USERNAME }}
+          password: ${{ secrets.ALF_QUAY_IO_PASSWORD }}
 
       - name: Docker Login to Chainguard (if applicable)
-        env:
-          CHAINGUARD_USERNAME: ${{ secrets.CHAINGUARD_USERNAME }}
-          CHAINGUARD_PASSWORD: ${{ secrets.CHAINGUARD_PASSWORD }}
-        run: |
-          source .env
-          cat .env
-
-          if [ -v CHAINGUARD_USERNAME ] && [ -v CHAINGUARD_PASSWORD ] && [ -n "${CHAINGUARD_USERNAME}" ] && [ -n "${CHAINGUARD_PASSWORD}" ] ; then
-              docker login -u "${CHAINGUARD_USERNAME}" -p "${CHAINGUARD_PASSWORD}" cgr.dev
-          else
-              [ -v CHAINGUARD_USERNAME ] || [ -v CHAINGUARD_PASSWORD ] && echo "These are the Chainguard credentials given (sha256sum):"
-              [ -v CHAINGUARD_USERNAME ] && echo -e "\tUSERNAME: [$(echo -n "${CHAINGUARD_USERNAME}" | sha256sum | awk '{ print $1 }')]"
-              [ -v CHAINGUARD_PASSWORD ] && echo -e "\tPASSWORD: [$(echo -n "${CHAINGUARD_PASSWORD}" | sha256sum | awk '{ print $1 }')]"
-              echo "The Chainguard credentials were insufficient. Will not authenticate."
-          fi
+        uses: docker/login-action@v4
+        if: ${{ secrets.CHAINGUARD_USERNAME != '' && secrets.CHAINGUARD_PASSWORD != '' }}
+        with:
+          registry: "cgr.dev"
+          username: ${{ secrets.CHAINGUARD_USERNAME }}
+          password: ${{ secrets.CHAINGUARD_PASSWORD }}
 
         # The AWS login needs to happen before the build b/c the
         # ECR_REGISTRY_PRIVATE value is computed here
