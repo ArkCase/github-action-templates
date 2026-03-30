@@ -47,11 +47,6 @@ on:
         required: false
         type: boolean
         default: false
-      vulnerabilities-result-format:
-        description: "The format to use for the primary vulnerability scan results (default 'json')"
-        required: false
-        type: string
-        default: "json"
 
     secrets:
       ECR_AWS_REGION:
