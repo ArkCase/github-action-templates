@@ -411,29 +411,31 @@ jobs:
       - name: Docker Login to Alfresco Quay.IO (if applicable)
         uses: docker/login-action@v4
         env:
+          REGISTRY: "quay.io"
           USERNAME: ${{ secrets.ALF_QUAY_IO_USERNAME }}
           PASSWORD: ${{ secrets.ALF_QUAY_IO_PASSWORD }}
         if: ${{ env.USERNAME != '' && env.PASSWORD != '' }}
         with:
-          registry: "quay.io"
+          registry: ${{ env.REGISTRY }}
           username: ${{ env.USERNAME }}
           password: ${{ env.PASSWORD }}
 
       - name: Docker Login to Chainguard (if applicable)
         uses: docker/login-action@v4
         env:
+          REGISTRY: "cgr.dev"
           USERNAME: ${{ secrets.CHAINGUARD_USERNAME }}
           PASSWORD: ${{ secrets.CHAINGUARD_PASSWORD }}
         if: ${{ env.USERNAME != '' && env.PASSWORD != '' }}
         with:
-          registry: "cgr.dev"
+          registry: ${{ env.REGISTRY }}
           username: ${{ env.USERNAME }}
           password: ${{ env.PASSWORD }}
 
         # The AWS login needs to happen before the build b/c the
         # ECR_REGISTRY_PRIVATE value is computed here
       - name: Login to Amazon ECR (Private)
-        id: login-ecr
+        id: login-ecr-private
         uses: aws-actions/amazon-ecr-login@v2
 
         # The AWS login needs to happen before the build b/c the
@@ -446,7 +448,7 @@ jobs:
 
       - name: Identify the build's characteristics (visibility, version number, etc)
         env:
-          ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr-private.outputs.registry }}
           ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
           PARAM_PUBLISH_MAJOR: ""
           PARAM_PUBLISH_MINOR: ""
@@ -727,7 +729,7 @@ jobs:
       - name: Build the Docker image
         env:
           MATRIX_REVISION: ${{ matrix.revision }}
-          ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr-private.outputs.registry }}
           ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
           ECR_AWS_REGION: ${{ secrets.ECR_AWS_REGION }}
           ECR_AWS_ACCESS_KEY: ${{ secrets.ECR_AWS_ACCESS_KEY }}
@@ -1191,7 +1193,7 @@ jobs:
         if: ${{ env.SCAN_COMP == 'true' }}
         continue-on-error: ${{ env.SCAN_COMP_REQUIRED != 'true' }}
         env:
-          ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr-private.outputs.registry }}
           ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
         run: |
           source .env
@@ -1258,7 +1260,7 @@ jobs:
         if: ${{ env.SCAN_VULN == 'true' }}
         continue-on-error: ${{ env.SCAN_VULN_REQUIRED != 'true' }}
         env:
-          ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr-private.outputs.registry }}
           ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
         run: |
           source .env
