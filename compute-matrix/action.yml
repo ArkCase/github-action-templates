@@ -1,0 +1,40 @@
+name: compute-matrix
+description: Compute which extra versions and/or variants of the container need to be built
+
+inputs:
+  revision:
+    description: "The revision number to use for construction (computed from the Dockerfile if not provided)"
+    required: true
+    type: string
+  portal:
+    description: "The FOIA Portal version to use for construction (computed from the Dockerfile if not provided)"
+    required: false
+    type: string
+
+runs:
+  using: composite
+  steps:
+    - id: revisions
+      name: Compute any additional revisions to be built
+      env:
+        PARAM_REVISION: ${{ inputs.revision }}
+        PARAM_PORTAL: ${{ inputs.portal }}
+        WORK_DIR: ${{ GITHUB_WORKSPACE }}
+        RE_FULL_REVISION: "^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$"
+      run: |
+        "${GITHUB_ACTION_PATH}/compute-revisions.sh" >> "${GITHUB_OUTPUT}"
+
+    - id: variants
+      name: Compute any additional variants to be built
+      env:
+        WORK_DIR: ${{ GITHUB_WORKSPACE }}
+      run: |
+        "${GITHUB_ACTION_PATH}/compute-variants.sh" >> "${GITHUB_OUTPUT}"
+
+outputs:
+  revisions:
+    description: "The different revision numbers to build for the container (* == only the requested one)"
+    value: ${{ steps.revisions.outputs.value }}
+  variants:
+    description: "The different variants to build for the container ('main' == only the primary variant)"
+    value: ${{ steps.variants.outputs.value }}
