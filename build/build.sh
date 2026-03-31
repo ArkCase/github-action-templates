@@ -1,6 +1,12 @@
 #!/bin/bash
 . "${GITHUB_ACTION_FILE}/common.sh"
 
+is_local_dev()
+{
+	[ "${LOCAL_DEV:-}" == "true" ] || return 1
+	return 0
+}
+
 WORK_DIR="$(readlink -f "${GITHUB_WORKSPACE:-.}")"
 
 # Set any build arguments with private values
