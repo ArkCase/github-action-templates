@@ -103,7 +103,7 @@ for CANDIDATE in "${CANDIDATES[@]}" ; do
 			# Output the old values without the new value
 			echo "${PREV}"
 			# Output the new value
-			echo "${KEY}=${VALUE@Q}"
+			echo "${KEY}=${VALUE}"
 		) | sort | sed -e '/^\s*$/d' > "${ARGS_TEMP}"
 	done <<< "${BUILD_ARGS}"
 done

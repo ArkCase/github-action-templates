@@ -102,7 +102,7 @@ if [ -z "${REVISION}" ] || [ -z "${PORTAL_VER}" ] ; then
 			# This checks for each variable and outputs its
 			# value if present, or an empty string if absent
 			V="${BUILD_ARG_PREFIX}${R}"
-			[ -v "${V}" ] && echo "${R}=${!V@Q}"
+			[ -v "${V}" ] && echo "${R}=${!V}"
 		done
 		exit 0
 	)" || RC=${?}
