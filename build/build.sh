@@ -1,34 +1,25 @@
 #!/bin/bash
 . "${GITHUB_ACTION_FILE}/common.sh"
 
-export WORK_DIR="$(readlink -f "${GITHUB_WORKSPACE:-.}")"
+WORK_DIR="$(readlink -f "${GITHUB_WORKSPACE:-.}")"
 
 # Set any build arguments with private values
-export BUILD_ARGS=()
+BUILD_ARGS=()
 BUILD_ARGS+=(--build-arg "FIPS=${FIPS}")
 
 # Always use the base version for this ...
 BUILD_ARGS+=(--build-arg "VER=${REVISION}")
 [ -n "${PORTAL_VER:-}" ] && BUILD_ARGS+=(--build-arg "PORTAL_VER=${PORTAL_VER}")
 
-LOCAL_DEV="false"
-if [ -n "${LOCAL_REGISTRY:-}" ] ; then
-	ECR_REGISTRY_PRIVATE="${LOCAL_REGISTRY}"
-	ECR_REGISTRY_PUBLIC="${LOCAL_REGISTRY}"
-	LOCAL_DEV="true"
-fi
-
-to_env LOCAL_DEV ECR_REGISTRY_PRIVATE ECR_REGISTRY_PUBLIC
-
 # Select the base registries
-BUILD_ARGS+=(--build-arg "PRIVATE_REGISTRY=${ECR_REGISTRY_PRIVATE}")
-BUILD_ARGS+=(--build-arg "PUBLIC_REGISTRY=${ECR_REGISTRY_PUBLIC}")
+BUILD_ARGS+=(--build-arg "PRIVATE_REGISTRY=${PRIVATE_REGISTRY}")
+BUILD_ARGS+=(--build-arg "PUBLIC_REGISTRY=${PUBLIC_REGISTRY}")
 BUILD_ARGS+=(--build-arg "BASE_VER_PFX=${REVISION_PREFIX}")
 
 # Select which one is the BASE registry, based on whether this
 # container is to be pushed to public or not
-BASE_REGISTRY="${ECR_REGISTRY_PRIVATE}"
-"${PUSH_TO_PUBLIC}" && BASE_REGISTRY="${ECR_REGISTRY_PUBLIC}"
+BASE_REGISTRY="${PRIVATE_REGISTRY}"
+"${PUSH_TO_PUBLIC}" && BASE_REGISTRY="${PUBLIC_REGISTRY}"
 BUILD_ARGS+=(--build-arg "BASE_REGISTRY=${BASE_REGISTRY}")
 
 # Apply the predefined BUILD_ARG_* arguments
@@ -147,8 +138,8 @@ REVISIONS+=("${EXACT_REVISION}")
 [ -n "${MINOR_REVISION}" ] && REVISIONS+=("${REVISION_PREFIX}${MINOR_REVISION}${REVISION_SUFFIX}")
 
 TARGETS=()
-TARGETS+=("${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}")
-"${PUSH_TO_PUBLIC}" && TARGETS+=("${ECR_REGISTRY_PUBLIC}/${IMAGE_URI}")
+TARGETS+=("${PRIVATE_REGISTRY}/${IMAGE_URI}")
+"${PUSH_TO_PUBLIC}" && TARGETS+=("${PUBLIC_REGISTRY}/${IMAGE_URI}")
 
 # Set the build tags to be built. Make sure to cover
 # both targets if applicable
@@ -200,14 +191,14 @@ if [ -z "${REVISION_PRERELEASE}" ] ; then
 			ecr )
 				LABEL="private"
 				QUERY="${IMAGE_URI}"
-				REG="${ECR_REGISTRY_PRIVATE}"
+				REG="${PRIVATE_REGISTRY}"
 				;;
 
 			ecr-public )
 				"${PUSH_TO_PUBLIC}" || continue
 				LABEL="public"
 				QUERY="${IMAGE_NAME}"
-				REG="${ECR_REGISTRY_PUBLIC}"
+				REG="${PUBLIC_REGISTRY}"
 				;;
 
 			* ) break ;;
@@ -218,18 +209,15 @@ if [ -z "${REVISION_PRERELEASE}" ] ; then
 		# do it like this so we only query the list twice.
 		if is_local_dev ; then
 			# TODO: get the tags using standard docker registry APIs ... how?!?!
-			:
+			ALL_REVISIONS=""
 		else
-			# Print out the tags from the image information
-			JQ_FIND_IMAGE_TAGS='.imageDetails[] | select(has("imageTags")) | .imageTags[]'
-
-			ALL_REVISIONS="$(
-				aws "${ECR}" describe-images --repository-name "${QUERY}" | \
-				jq -r "${JQ_FIND_IMAGE_TAGS}" | \
+			ALL_REVISIONS="$("${GITHUB_ACTION_PATH}/get-aws-tags.sh" "${QUERY}")" || ALL_REVISIONS=""
+			[ -n "${ALL_REVISIONS}" ] && ALL_REVISIONS="$(
+				echo "${ALL_REVISIONS}" | \
 				grep -E "^${REVISION_PREFIX}${RE_REVISION_SELECTOR}$" | \
 				sed -e "s;^${REVISION_PREFIX};;g" | \
 				sort --version-sort --unique --reverse
-			)" || ALL_REVISIONS=""
+			)"
 		fi
 
 		# We have a possible maximum of 3 "latest" tags to create:
@@ -337,7 +325,7 @@ if [ -z "${REVISION_PRERELEASE}" ] ; then
 	done
 fi
 
-to_env_array BUILDS
+to_env BUILDS="$(echo -n "${BUILDS[@]}" | tr ' ' ',')"
 
 # We only build to a single tag b/c the security scanner pukes otherwise
 # (don't ask XD). We instead create out-of-band tags for the container
@@ -347,8 +335,7 @@ to_env_array BUILDS
 #
 # We do it like this to avoid having to modify the "docker push"
 # section, below.
-AUTHORITATIVE_TAG="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${EXACT_REVISION}"
-to_env AUTHORITATIVE_TAG
+to_env AUTHORITATIVE_TAG="${PRIVATE_REGISTRY}/${IMAGE_URI}:${EXACT_REVISION}"
 RC=0
 (
 	echo "Cleaning out the Docker system..."
@@ -373,6 +360,7 @@ else
 	TAG_PREFIX="test"
 	SCAN_REPORT_RETENTION_DAYS="30"
 fi
+to_env SCAN_REPORT_RETENTION_DAYS
 
 [ "${VARIANT}" != "main" ] && TAG_PREFIX+="/${VARIANT}"
 
@@ -385,9 +373,11 @@ if ! is_local_dev ; then
 	done
 fi
 
-REPORT_TARGET_PATH="${IMAGE_URI}/${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}/b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
+to_env REPORT_TARGET_PATH="${IMAGE_URI}/${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}/b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
 
 ARTIFACT_IDENTIFIER=""
+SCAN_COMP="true"
+SCAN_VULN="true"
 case "${GITHUB_REF_NAME}" in
 	main ) ;;
 	develop ) ARTIFACT_IDENTIFIER=".${GITHUB_REF_NAME}" ;;
@@ -395,6 +385,7 @@ case "${GITHUB_REF_NAME}" in
 	# We only do vulnerability scanning for main, develop, and the FIPS branches
 	* ) SCAN_COMP="false" ; SCAN_VULN="false" ;;
 esac
+to_env SCAN_COMP SCAN_VULN
 
 # If we're running builds for multiple dynamic revisions,
 # we have to append the revision to the artifact name
@@ -403,49 +394,25 @@ esac
 # If we're building a non-main variant, append the variant
 [ "${VARIANT}" != "main" ] && ARTIFACT_IDENTIFIER+="-${VARIANT}"
 
-SCAN_DIR="${WORK_DIR}/security-scan"
+# Save the final value
+to_env ARTIFACT_IDENTIFIER
+
+to_env SCAN_DIR="${WORK_DIR}/security-scan"
 
 # TODO: account for the branch name!
-COMP_REPORT_BASE="compliance${ARTIFACT_IDENTIFIER}"
-COMP_REPORT_PATH="${SCAN_DIR}/${COMP_REPORT_BASE}"
-COMP_REPORT_PATTERN="${COMP_REPORT_PATH}.*"
-COMP_REPORT_XML_SOURCE="${COMP_REPORT_PATH}.xml"
-COMP_REPORT_HDF_SOURCE="${COMP_REPORT_PATH}.hdf"
-COMP_REPORT_HTML_SOURCE="${COMP_REPORT_PATH}.html"
-COMP_REPORT_SARIF_SOURCE="${COMP_REPORT_PATH}.sarif"
+to_env COMP_REPORT_BASE="compliance${ARTIFACT_IDENTIFIER}"
+to_env COMP_REPORT_PATH="${SCAN_DIR}/${COMP_REPORT_BASE}"
+to_env COMP_REPORT_PATTERN="${COMP_REPORT_PATH}.*"
+to_env COMP_REPORT_XML_SOURCE="${COMP_REPORT_PATH}.xml"
+to_env COMP_REPORT_HDF_SOURCE="${COMP_REPORT_PATH}.hdf"
+to_env COMP_REPORT_HTML_SOURCE="${COMP_REPORT_PATH}.html"
+to_env COMP_REPORT_SARIF_SOURCE="${COMP_REPORT_PATH}.sarif"
 
 # TODO: account for the branch name!
-VULN_REPORT_BASE="vulnerabilities${ARTIFACT_IDENTIFIER}"
-VULN_REPORT_PATH="${SCAN_DIR}/${VULN_REPORT_BASE}"
-VULN_REPORT_PATTERN="${VULN_REPORT_PATH}.*"
-VULN_REPORT_JSON_SOURCE="${VULN_REPORT_PATH}.json"
-VULN_REPORT_HTML_SOURCE="${VULN_REPORT_PATH}.html"
-VULN_REPORT_SARIF_SOURCE="${VULN_REPORT_PATH}.sarif"
-VULN_REPORT_SBOM_SOURCE="${VULN_REPORT_PATH}.cdx"
-
-VARS=(
-	AUTHORITATIVE_TAG
-	ARTIFACT_IDENTIFIER
-	REPORT_TARGET_PATH
-
-	SCAN_DIR
-	SCAN_COMP
-	SCAN_VULN
-
-	COMP_REPORT_BASE
-	COMP_REPORT_PATTERN
-	COMP_REPORT_XML_SOURCE
-	COMP_REPORT_HDF_SOURCE
-	COMP_REPORT_HTML_SOURCE
-	COMP_REPORT_SARIF_SOURCE
-
-	VULN_REPORT_BASE
-	VULN_REPORT_PATTERN
-	VULN_REPORT_HTML_SOURCE
-	VULN_REPORT_SARIF_SOURCE
-	VULN_REPORT_SBOM_SOURCE
-	VULN_REPORT_JSON_SOURCE
-
-	SCAN_REPORT_RETENTION_DAYS
-)
-to_env "${VARS[@]}"
+to_env VULN_REPORT_BASE="vulnerabilities${ARTIFACT_IDENTIFIER}"
+to_env VULN_REPORT_PATH="${SCAN_DIR}/${VULN_REPORT_BASE}"
+to_env VULN_REPORT_PATTERN="${VULN_REPORT_PATH}.*"
+to_env VULN_REPORT_JSON_SOURCE="${VULN_REPORT_PATH}.json"
+to_env VULN_REPORT_HTML_SOURCE="${VULN_REPORT_PATH}.html"
+to_env VULN_REPORT_SARIF_SOURCE="${VULN_REPORT_PATH}.sarif"
+to_env VULN_REPORT_SBOM_SOURCE="${VULN_REPORT_PATH}.cdx"

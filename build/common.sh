@@ -24,7 +24,8 @@ to_env()
 			KEY="${VAR}"
 			VALUE="${!VAR:-}"
 		fi
-		echo "declare -xg ${KEY}=${VALUE@Q}" >> "${ENV_FILE}"
+		declare -xg "${KEY}=${VALUE}"
+		declare -p "${KEY}" >> "${ENV_FILE}"
 		[ -n "${GITHUB_ENV:-}" ] && echo "${KEY}=${VALUE}" >> "${GITHUB_ENV}"
 	done
 }

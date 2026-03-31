@@ -48,6 +48,18 @@ export IMAGE_URI="${PRODUCT_SUITE}/${IMAGE_NAME}"
 
 to_env PRODUCT_SUITE IMAGE_NAME IMAGE_URI
 
+if [ -n "${LOCAL_REGISTRY:-}" ] ; then
+	PRIVATE_REGISTRY="${LOCAL_REGISTRY}"
+	PUBLIC_REGISTRY="${LOCAL_REGISTRY}"
+	LOCAL_DEV="true"
+else
+	PRIVATE_REGISTRY="${ECR_REGISTRY_PRIVATE}"
+	PUBLIC_REGISTRY="${ECR_REGISTRY_PUBLIC}"
+	LOCAL_DEV="false"
+fi
+
+to_env LOCAL_DEV PRIVATE_REGISTRY PUBLIC_REGISTRY
+
 #
 # Make sure it's defined if it isn't already
 #
@@ -80,9 +92,9 @@ if [ -z "${REVISION}" ] || [ -z "${PORTAL_VER}" ] ; then
 
 		# It's OK to define these here ... if they get overridden below, we're happy about it.
 		# Otherwise, we fall back to these values to avoid failing the parse.
-		declare -gx "${BUILD_ARG_PREFIX}PRIVATE_REGISTRY=${ECR_REGISTRY_PRIVATE}"
-		declare -gx "${BUILD_ARG_PREFIX}PUBLIC_REGISTRY=${ECR_REGISTRY_PUBLIC}"
-		declare -gx "${BUILD_ARG_PREFIX}BASE_REGISTRY=${ECR_REGISTRY_PRIVATE}"
+		declare -gx "${BUILD_ARG_PREFIX}PRIVATE_REGISTRY=${PRIVATE_REGISTRY}"
+		declare -gx "${BUILD_ARG_PREFIX}PUBLIC_REGISTRY=${PUBLIC_REGISTRY}"
+		declare -gx "${BUILD_ARG_PREFIX}BASE_REGISTRY=${PRIVATE_REGISTRY}"
 		alias ARG=export
 
 		# The below has a bug: an escaped $ would not be caught and could
@@ -147,6 +159,8 @@ fi
 #
 [ "${PUBLISH_MAJOR,,}" == "true" ] && PUBLISH_MAJOR="true" || PUBLISH_MAJOR="false"
 [ "${PUBLISH_MINOR,,}" == "true" ] && PUBLISH_MINOR="true" || PUBLISH_MINOR="false"
+
+to_env PUBLISH_MAJOR PUBLISH_MINOR
 
 #
 # Parse for vailidity ... we'll examine it more closely later
@@ -259,7 +273,6 @@ if [ -n "${PORTAL_VER}" ] ; then
 		PORTAL_SNAPSHOT
 fi
 
-to_env PUBLISH_MAJOR PUBLISH_MINOR
 
 # We only push to public if this is a public repository,
 # AND this build is not a pre-release build
