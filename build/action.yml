@@ -1,0 +1,243 @@
+name: Build Armedia Docker Containers
+inputs:
+  revision:
+    description: "The revision number to use for construction (computed from the Dockerfile if not provided)"
+    required: false
+    type: string
+
+  portal:
+    description: "The FOIA Portal version to use for construction (computed from the Dockerfile if not provided)"
+    required: false
+    type: string
+
+  reports-bucket:
+    description: "The bucket into which to upload the STIG Compliance and Vulnerability reports (defaults to 'arkcase-container-scan-results')"
+    required: false
+    type: string
+    default: "arkcase-container-scan-results"
+
+  maximize-build-space:
+    description: "Whether or not to maximize the build space by removing unnecessary tools & libraries"
+    required: false
+    type: boolean
+    default: false
+
+  curl-encryption-key:
+    description: "The encryption key with which to decrypt the username and password for general cURL downloads in the containers"
+    required: false
+    type: string
+    default: ""
+
+  curl-username:
+    description: "The (optionally-encrypted with curl-encryption-key) username to authenticate with for general cURL downloads in the container build"
+    required: false
+    type: string
+    default: ""
+
+  curl-password:
+    description: "The encrypted (using curl-encryption-key) password to authenticate with for general cURL downloads in the container build"
+    required: false
+    type: string
+    default: ""
+
+  mvn-get-encryption-key:
+    description: "The encryption key with which to decrypt the username and password for general Maven downloads in the containers"
+    required: false
+    type: string
+    default: ""
+
+  mvn-get-username:
+    description: "The (optionally-encrypted with mvn-get-encryption-key) username to authenticate with for general Maven downloads in the container build"
+    required: false
+    type: string
+    default: ""
+
+  mvn-get-password:
+    description: "The encrypted (using mvn-get-encryption-key) password to authenticate with for general Maven downloads in the container build"
+    required: false
+    type: string
+    default: ""
+
+  scanner-image:
+    description: "The contiainer image to use for vulnerability and compliance scanning"
+    required: false
+    type: string
+
+  compliance-scan:
+    description: "Whether or not to scan for STIG compliance on the build"
+    required: false
+    type: boolean
+    # Start of false, for testing...
+    default: true
+
+  compliance-required:
+    description: "Whether or not to require full STIG compliance to approve the build (default false)"
+    required: false
+    type: boolean
+    default: false
+
+  vulnerabilities-scan:
+    description: "Whether or not to scan for vulnerabilities on the build"
+    required: false
+    type: boolean
+    default: true
+
+  vulnerabilities-required:
+    description: "Whether or not to require no CRIT or HIGH vulnerabilities to approve the build (default false)"
+    required: false
+    type: boolean
+    default: false
+
+    env:
+      # Enable/disable STIG Compliance Scans
+      SCAN_COMP: ${{ inputs.compliance-scan }}
+      SCAN_COMP_REQUIRED: ${{ inputs.compliance-required }}
+
+      # Enable/disable Vulnerability Scans
+      SCAN_VULN: ${{ inputs.vulnerabilities-scan }}
+      SCAN_VULN_REQUIRED: ${{ inputs.vulnerabilities-required }}
+
+      DEVEL_KEEP_DAYS: 30
+      SNAPSHOT_KEEP_DAYS: 30
+
+runs:
+  using: composite
+  steps:
+    - name: Identify the build's characteristics (visibility, version number, etc)
+      env:
+        ECR_REGISTRY_PRIVATE: ${{ inputs.private-registry }}
+        ECR_REGISTRY_PUBLIC: ${{ inputs.public-registry }}
+        ENV_FILE: ${{ inputs.env-file }}
+      run: |
+        "${GITHUB_ACTION_PATH}/initialize.sh"
+
+    - name: Show Current Build Space
+      env:
+        MAXIMIZE_BUILD_SPACE: ${{ inputs.maximize-build-space }}
+      if: ${{ env.MAXIMIZE_BUILD_SPACE == 'true' }}
+      run: df -kh
+
+    - name: Clear Out All Possible Disk Space
+      env:
+        MAXIMIZE_BUILD_SPACE: ${{ inputs.maximize-build-space }}
+      if: ${{ env.MAXIMIZE_BUILD_SPACE == 'true' }}
+      uses: jlumbroso/free-disk-space@main
+
+    - name: Show Maximized Build Space
+      env:
+        MAXIMIZE_BUILD_SPACE: ${{ inputs.maximize-build-space }}
+      if: ${{ env.MAXIMIZE_BUILD_SPACE == 'true' }}
+      run: df -kh
+
+    - name: Build the Docker image
+      env:
+        MATRIX_REVISION: ${{ input.revision }}
+        ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr-private.outputs.registry }}
+        ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
+        ECR_AWS_REGION: ${{ secrets.ECR_AWS_REGION }}
+        ECR_AWS_ACCESS_KEY: ${{ secrets.ECR_AWS_ACCESS_KEY }}
+        ECR_AWS_SECRET_ACCESS_KEY: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
+        CURL_ENCRYPTION_KEY: ${{ secrets.CURL_ENCRYPTION_KEY }}
+        CURL_USERNAME: ${{ secrets.CURL_USERNAME }}
+        CURL_PASSWORD: ${{ secrets.CURL_PASSWORD }}
+        MVN_GET_ENCRYPTION_KEY: ${{ secrets.MVN_GET_ENCRYPTION_KEY }}
+        MVN_GET_USERNAME: ${{ secrets.MVN_GET_USERNAME }}
+        MVN_GET_PASSWORD: ${{ secrets.MVN_GET_PASSWORD }}
+      run: |
+       "${GITHUB_ACTION_PATH}/build.sh"
+
+    - name: Run the security scans
+      if: ${{ (env.SCAN_COMP == 'true') || (env.SCAN_VULN == 'true') }}
+      uses: arkcase/github-action-templates/scan-container@main
+      with:
+        container-image: ${{ env.AUTHORITATIVE_TAG }}
+        scanner-image: ${{ inputs.scanner-image }}
+        results-directory: ${{ env.SCAN_DIR }}
+        results-suffix: ${{ env.ARTIFACT_IDENTIFIER }}
+        compliance-scan: ${{ inputs.compliance-scan }}
+        compliance-required: ${{ inputs.compliance-required }}
+        vulnerabilities-scan: ${{ inputs.vulnerabilities-scan }}
+        vulnerabilities-required: ${{ inputs.vulnerabilities-required }}
+
+    - name: Upload the STIG compliance report to the GitHub Artifacts tab
+      if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
+      uses: actions/upload-artifact@v6
+      with:
+        name: ${{ env.COMP_REPORT_BASE }}
+        path: ${{ env.COMP_REPORT_PATTERN }}
+        retention-days: ${{ env.SCAN_REPORT_RETENTION_DAYS }}
+
+    - name: Upload the STIG compliance report to the GitHub Security tab
+      if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: ${{ env.COMP_REPORT_SARIF_SOURCE }}
+        category: stig-compliance
+
+    - name: Upload the STIG compliance report to S3
+      if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
+      env:
+        REPORTS_BUCKET: ${{ inputs.reports-bucket }}
+      run: |
+        source .env
+        cat .env
+        COUNT=0
+        while read SRC ; do
+            echo "Uploading [${SRC}] to [s3://${REPORTS_BUCKET}/${REPORT_TARGET_PATH}]..."
+            aws s3 cp "${SRC}" "s3://${REPORTS_BUCKET}/${REPORT_TARGET_PATH}/${SRC##*/}"
+            (( ++COUNT ))
+        done < <(find . -mindepth 1 -maxdepth 1 -type f -name "${COMP_REPORT_PATTERN}" | sort | cut -c3-)
+        [ ${COUNT} -eq 0 ] || echo "Uploaded ${COUNT} report(s)!"
+
+    - name: Upload the vulnerabilities reports to the GitHub artifacts tab
+      if: ${{ hashFiles(env.VULN_REPORT_JSON_SOURCE) != '' }}
+      uses: actions/upload-artifact@v6
+      with:
+        name: ${{ env.VULN_REPORT_BASE }}
+        path: ${{ env.VULN_REPORT_PATTERN }}
+        retention-days: ${{ env.SCAN_REPORT_RETENTION_DAYS }}
+
+    - name: Upload the vulnerabilities report to the GitHub Security tab
+      if: ${{ hashFiles(env.VULN_REPORT_SARIF_SOURCE) != '' }}
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: ${{ env.VULN_REPORT_SARIF_SOURCE }}
+        category: vulnerabilities
+
+    - name: Upload the vulnerabilities report to S3
+      if: ${{ hashFiles(env.VULN_REPORT_JSON_SOURCE) != '' }}
+      env:
+        REPORTS_BUCKET: ${{ inputs.reports-bucket }}
+      run: |
+        source .env
+        cat .env
+        COUNT=0
+        while read SRC ; do
+            echo "Uploading [${SRC}] to [s3://${REPORTS_BUCKET}/${REPORT_TARGET_PATH}]..."
+            aws s3 cp "${SRC}" "s3://${REPORTS_BUCKET}/${REPORT_TARGET_PATH}/${SRC##*/}"
+            (( ++COUNT ))
+        done < <(find . -mindepth 1 -maxdepth 1 -type f -name "${VULN_REPORT_PATTERN}" | sort | cut -c3-)
+        [ ${COUNT} -eq 0 ] || echo "Uploaded ${COUNT} report(s)!"
+
+    - name: Rebuild adding the scan results
+      if: ${{ (hashFiles(env.VULN_REPORT_JSON_SOURCE) != '') || (hashFiles(env.COMP_REPORT_XML_SOURCE) != '') }}
+      run: |
+        "${GITHUB_ACTION_PATH}/rebuild-with-scans.sh"
+
+    - name: Push the new tags
+      run: |
+        source .env
+        cat .env
+
+        # We split this up b/c if this build doesn't pass the security scan,
+        # it won't be uploaded or tagged (eventually :D)
+        git push --force --tags
+
+    - name: Publish the Docker Container Image
+      uses: arkcase/github-action-templates/scan-container@main
+      with:
+        devel-keep-days: ${{ env.DEVEL_KEEP_DAYS }}
+        snapshot-keep-days: ${{ env.SNAPSHOT_KEEP_DAYS }}
+        aws-org-id: ${{ env.ECR_AWS_ORG_ID }}
