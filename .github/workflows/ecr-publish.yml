@@ -7,11 +7,6 @@ on:
         required: false
         type: string
 
-      arkcase:
-        description: "The ArkCase version to use for construction (ignored, preserved for backwards compatibility)"
-        required: false
-        type: string
-
       portal:
         description: "The FOIA Portal version to use for construction (computed from the Dockerfile if not provided)"
         required: false
@@ -127,7 +122,8 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      # This is inefficient, but necessary
+      # This is inefficient, but necessary b/c we may not share
+      # the worker with the actual build's actions, below
       - name: Checkout source code
         uses: actions/checkout@v6
 
@@ -142,7 +138,7 @@ jobs:
       revisions: ${{ steps.compute-matrix.revisions.outputs.value }}
       variants: ${{ steps.compute-matrix.variants.outputs.value }}
 
-  ECR-Publishing:
+  Build-and-Publish:
     needs: [ "Compute-Revisions" ]
     runs-on: ubuntu-24.04
 
@@ -157,36 +153,55 @@ jobs:
       GH_TOKEN: ${{ github.token }}
 
     steps:
+      # This is inefficient, but necessary b/c we may not share
+      # the worker with the matrix computation actions, above
       - name: Checkout source code
         uses: actions/checkout@v6
 
       - name: Build the Container Image
         uses: arkcase/github-action-templates/build@main
         with:
+          # General build parameters
           matrix-revision: ${{ matrix.revision }}
           matrix-variant: ${{ matrix.variant }}
           revision: ${{ inputs.revision }}
           portal: ${{ inputs.portal }}
+
+          # In case we need more disk space
           maximize-build-space: ${{ inputs.maximize-build-space }}
-          reports-bucket: ${{ inputs.reports-bucket }}
+
+          # AWS Access Secrets
           aws-org-id: ${{ secrets.ECR_AWS_ORG_ID }}
           aws-region: ${{ secrets.AWS_REGION }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+          # Alfresco's Quay.IO Credentials
           alf-quay-io-username: ${{ secrets.ALF_QUAY_IO_USERNAME }}
           alf-quay-io-password: ${{ secrets.ALF_QUAY_IO_PASSWORD }}
+
+          # Chainguard Credentials
           chainguard-username: ${{ secrets.CHAINGUARD_USERNAME }}
           chainguard-password: ${{ secrets.CHAINGUARD_PASSWORD }}
+
+          # For general cURL-get authentication
           curl-encryption-key: ${{ secrets.CURL_ENCRYPTION_KEY }}
           curl-username: ${{ secrets.CURL_USERNAME }}
           curl-password: ${{ secrets.CURL_PASSWORD }}
+
+          # For general Maven authentication
           mvn-get-encryption-key: ${{ secrets.MVN_GET_ENCRYPTION_KEY }}
           mvn-get-username: ${{ secrets.MVN_GET_USERNAME }}
           mvn-get-password: ${{ secrets.MVN_GET_PASSWORD }}
+
+          # Parameters for security scanning
           scanner-image: ${{ inputs.scanner-image }}
+          reports-bucket: ${{ inputs.reports-bucket }}
           compliance-scan: ${{ inputs.compliance-scan }}
           compliance-required: ${{ inputs.compliance-required }}
           vulnerabilities-scan: ${{ inputs.vulnerabilities-scan }}
           vulnerabilities-required: ${{ inputs.vulnerabilities-required }}
+
+          # For ECR repository policies
           devel-keep-days: ${{ inputs.devel-keep-days }}
           snapshot-keep-days: ${{ inputs.snapshot-keep-days }}

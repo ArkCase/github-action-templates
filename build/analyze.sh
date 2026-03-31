@@ -23,11 +23,7 @@ if [ "${VARIANT}" == "fips" ] ; then
 fi
 "${PRIVATE}" || VISIBILITY="public"
 
-echo "export VISIBILITY=${VISIBILITY@Q}" | to_env
-echo "VISIBILITY=${VISIBILITY@Q}"
-
-echo "export FIPS=${FIPS@Q}" | to_env
-echo "FIPS=${FIPS@Q}"
+to_env VISIBILITY FIPS
 
 #
 # Split into an array of parts, making sure that double slashes, if present, are condensed into one
@@ -47,17 +43,10 @@ export IMAGE_NAME="${PARTS[1]//_/-}"
 case "${PRODUCT_SUITE}" in
 	"arkcase" ) IMAGE_NAME="$(echo -n "${IMAGE_NAME}" | sed -e "s;^ark-;;g")" ;;
 esac
-
-echo "export PRODUCT_SUITE=${PRODUCT_SUITE@Q}" | to_env
-echo "PRODUCT_SUITE=${PRODUCT_SUITE@Q}"
-
 [ -n "${FIPS}" ] && IMAGE_NAME+="${FIPS}"
-echo "export IMAGE_NAME=${IMAGE_NAME@Q}" | to_env
-echo "IMAGE_NAME=${IMAGE_NAME@Q}"
-
 export IMAGE_URI="${PRODUCT_SUITE}/${IMAGE_NAME}"
-echo "export IMAGE_URI=${IMAGE_URI@Q}" | to_env
-echo "IMAGE_URI=${IMAGE_URI@Q}"
+
+to_env PRODUCT_SUITE IMAGE_NAME IMAGE_URI
 
 #
 # Make sure it's defined if it isn't already
@@ -83,17 +72,17 @@ if [ -z "${REVISION}" ] || [ -z "${PORTAL_VER}" ] ; then
 		# We have to resort to evil black magic b/c we have to cover the edge case of
 		# line continuations - we have to collapse those, first... then we can find the
 		# ARG clauses, and finally convert them all into bash "export" clauses ... which
-		# we then consume (this is why redefinition is an issue, above). We use a PREFIX
+		# we then consume (this is why redefinition is an issue, above). We use a prefix
 		# to avoid name clashes with read-only BASH variables which can cause the task
 		# to fail, and we use special SED strings to add the prefix as necessary for
 		# variable expansion among the arguments themselves
-		export PREFIX="____DOCKER_ARG____"
+		export BUILD_ARG_PREFIX="____DOCKER_ARG____"
 
 		# It's OK to define these here ... if they get overridden below, we're happy about it.
 		# Otherwise, we fall back to these values to avoid failing the parse.
-		declare -gx "${PREFIX}PRIVATE_REGISTRY=${ECR_REGISTRY_PRIVATE}"
-		declare -gx "${PREFIX}PUBLIC_REGISTRY=${ECR_REGISTRY_PUBLIC}"
-		declare -gx "${PREFIX}BASE_REGISTRY=${ECR_REGISTRY_PRIVATE}"
+		declare -gx "${BUILD_ARG_PREFIX}PRIVATE_REGISTRY=${ECR_REGISTRY_PRIVATE}"
+		declare -gx "${BUILD_ARG_PREFIX}PUBLIC_REGISTRY=${ECR_REGISTRY_PUBLIC}"
+		declare -gx "${BUILD_ARG_PREFIX}BASE_REGISTRY=${ECR_REGISTRY_PRIVATE}"
 		alias ARG=export
 
 		# The below has a bug: an escaped $ would not be caught and could
@@ -103,16 +92,16 @@ if [ -z "${REVISION}" ] || [ -z "${PORTAL_VER}" ] ; then
 				grep -Ei '^\s*ARG\s+' | \
 				sed \
 					-e "s;^\s*[Aa][Rr][Gg]\(\s\+\);ARG\1;g" \
-					-e "s;\${;\$\{${PREFIX};g" \
-					-e "s;\$\([^{]\);\$${PREFIX}\1;g" | \
-				sed -e "s;^\s*ARG\s;export ${PREFIX};g"
+					-e "s;\${;\$\{${BUILD_ARG_PREFIX};g" \
+					-e "s;\$\([^{]\);\$${BUILD_ARG_PREFIX}\1;g" | \
+				sed -e "s;^\s*ARG\s;export ${BUILD_ARG_PREFIX};g"
 		)
 
 		# Output the variable declarations we're interested in
 		for R in "VER" "PORTAL_VER" "PUBLISH_MAJOR" "PUBLISH_MINOR" ; do
 			# This checks for each variable and outputs its
 			# value if present, or an empty string if absent
-			V="${PREFIX}${R}"
+			V="${BUILD_ARG_PREFIX}${R}"
 			[ -v "${V}" ] && echo "${R}=${!V@Q}"
 		done
 		exit 0
@@ -176,16 +165,16 @@ if [[ ! "${REVISION}" =~ ${RE_FULL_REVISION} ]] ; then
 	exit 1
 fi
 
-BASE_NUMBER="${BASH_REMATCH[1]}"
-PRERELEASE="${BASH_REMATCH[5]}"
-METADATA="${BASH_REMATCH[8]}"
+REVISION_BASE_NUMBER="${BASH_REMATCH[1]}"
+REVISION_PRERELEASE="${BASH_REMATCH[5]}"
+REVISION_METADATA="${BASH_REMATCH[8]}"
 
 #
 # If the pre-release info is a "SNAPSHOT", make sure it's used properly
 #
 REVISION_SNAPSHOT="false"
-if [[ "${PRERELEASE}" =~ SNAPSHOT ]] ; then
-	if [[ "${PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT ]] ; then
+if [[ "${REVISION_PRERELEASE}" =~ SNAPSHOT ]] ; then
+	if [[ "${REVISION_PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT ]] ; then
 		REVISION_SNAPSHOT="true"
 	else
 		echo "Illegal use of the word 'SNAPSHOT' as [${PRERELASE}] - must be the last word: [${REVISION}]"
@@ -223,7 +212,7 @@ if [ -n "${PORTAL_VER}" ] ; then
 	# for production builds)
 	if "${REVISION_SNAPSHOT}" ; then
 		REVISION_QUALITY="0"
-	elif [ -n "${PRERELEASE}" ] ; then
+	elif [ -n "${REVISION_PRERELEASE}" ] ; then
 		REVISION_QUALITY="1"
 	else
 		REVISION_QUALITY="2"
@@ -247,49 +236,34 @@ fi
 
 # Assume the default is "devel", until proven otherwise
 export ENVIRONMENT="devel"
-export PREFIX="devel-"
+export REVISION_PREFIX="devel-"
 # This makes it easier to add special branch handlers later on
 case "${GITHUB_REF}" in
-	"refs/heads/main" | "refs/tags/release"/* ) ENVIRONMENT="stable" ; PREFIX="" ;;
+	"refs/heads/main" | "refs/tags/release"/* ) ENVIRONMENT="stable" ; REVISION_PREFIX="" ;;
 esac
-echo "export ENVIRONMENT=${ENVIRONMENT@Q}" | to_env
-echo "ENVIRONMENT=${ENVIRONMENT@Q}"
+to_env ENVIRONMENT REVISION_PREFIX
 
-echo "export REVISION_PREFIX=${PREFIX@Q}" | to_env
-echo "REVISION_PREFIX=${PREFIX@Q}"
-
-echo "export REVISION=${REVISION@Q}" | to_env
-echo "export REVISION_BASE_NUMBER=${BASE_NUMBER@Q}" | to_env
-echo "export REVISION_PRERELEASE=${PRERELEASE@Q}" | to_env
-echo "export REVISION_METADATA=${METADATA@Q}" | to_env
-echo "export REVISION_SNAPSHOT=${REVISION_SNAPSHOT@Q}" | to_env
-echo "REVISION=${REVISION@Q}"
-echo "REVISION_BASE_NUMBER=${BASE_NUMBER@Q}"
-echo "REVISION_PRERELEASE=${PRERELEASE@Q}"
-echo "REVISION_METADATA=${METADATA@Q}"
-echo "REVISION_SNAPSHOT=${REVISION_SNAPSHOT@Q}"
+to_env \
+	REVISION \
+	REVISION_BASE_NUMBER \
+	REVISION_PRERELEASE \
+	REVISION_METADATA \
+	REVISION_SNAPSHOT
 
 if [ -n "${PORTAL_VER}" ] ; then
-	echo "export PORTAL_VER=${PORTAL_VER@Q}" | to_env
-	echo "export PORTAL_BASE_NUMBER=${PORTAL_BASE_NUMBER@Q}" | to_env
-	echo "export PORTAL_PRERELEASE=${PORTAL_PRERELEASE@Q}" | to_env
-	echo "export PORTAL_METADATA=${PORTAL_METADATA@Q}" | to_env
-	echo "export PORTAL_SNAPSHOT=${PORTAL_SNAPSHOT@Q}" | to_env
-	echo "PORTAL_VER=${PORTAL_VER@Q}"
-	echo "PORTAL_BASE_NUMBER=${PORTAL_BASE_NUMBER@Q}"
-	echo "PORTAL_PRERELEASE=${PORTAL_PRERELEASE@Q}"
-	echo "PORTAL_METADATA=${PORTAL_METADATA@Q}"
-	echo "PORTAL_SNAPSHOT=${PORTAL_SNAPSHOT@Q}"
+	to_env \
+		PORTAL_VER \
+		PORTAL_BASE_NUMBER \
+		PORTAL_PRERELEASE \
+		PORTAL_METADATA \
+		PORTAL_SNAPSHOT
 fi
 
-echo "export PUBLISH_MAJOR=${PUBLISH_MAJOR@Q}" | to_env
-echo "PUBLISH_MAJOR=${PUBLISH_MAJOR@Q}"
-echo "export PUBLISH_MINOR=${PUBLISH_MINOR@Q}" | to_env
-echo "PUBLISH_MINOR=${PUBLISH_MINOR@Q}"
+to_env PUBLISH_MAJOR PUBLISH_MINOR
 
 # We only push to public if this is a public repository,
 # AND this build is not a pre-release build
 export PUSH_TO_PUBLIC="false"
-[ "${ENVIRONMENT}" == "stable" ] && [ "${VISIBILITY}" == "public" ] && [ -z "${PRERELEASE}" ] && PUSH_TO_PUBLIC="true"
-echo "export PUSH_TO_PUBLIC=${PUSH_TO_PUBLIC@Q}" | to_env
-echo "PUSH_TO_PUBLIC=${PUSH_TO_PUBLIC@Q}"
+[ "${ENVIRONMENT}" == "stable" ] && [ "${VISIBILITY}" == "public" ] && [ -z "${REVISION_PRERELEASE}" ] && PUSH_TO_PUBLIC="true"
+
+to_env PUSH_TO_PUBLIC

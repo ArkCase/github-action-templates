@@ -40,5 +40,4 @@ done
     exec docker build --file "${DF}" --tag "${AUTHORITATIVE_TAG}" "${EXTRA_TAGS[@]}" .
 ) || exit ${?}
 
-echo "TAGS_ADDED='true'" | to_env
-echo "TAGS_ADDED=true" | to_github_env
+to_env TAGS_ADDED="true"

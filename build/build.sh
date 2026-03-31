@@ -1,6 +1,8 @@
 #!/bin/bash
 . "${GITHUB_ACTION_FILE}/common.sh"
 
+export WORK_DIR="$(readlink -f "${GITHUB_WORKSPACE:-.}")"
+
 # Set any build arguments with private values
 export BUILD_ARGS=()
 BUILD_ARGS+=(--build-arg "FIPS=${FIPS}")
@@ -8,6 +10,15 @@ BUILD_ARGS+=(--build-arg "FIPS=${FIPS}")
 # Always use the base version for this ...
 BUILD_ARGS+=(--build-arg "VER=${REVISION}")
 [ -n "${PORTAL_VER:-}" ] && BUILD_ARGS+=(--build-arg "PORTAL_VER=${PORTAL_VER}")
+
+LOCAL_DEV="false"
+if [ -n "${LOCAL_REGISTRY:-}" ] ; then
+	ECR_REGISTRY_PRIVATE="${LOCAL_REGISTRY}"
+	ECR_REGISTRY_PUBLIC="${LOCAL_REGISTRY}"
+	LOCAL_DEV="true"
+fi
+
+to_env LOCAL_DEV ECR_REGISTRY_PRIVATE ECR_REGISTRY_PUBLIC
 
 # Select the base registries
 BUILD_ARGS+=(--build-arg "PRIVATE_REGISTRY=${ECR_REGISTRY_PRIVATE}")
@@ -27,7 +38,7 @@ for VAR in "${!BUILD_ARG_@}" ; do
 	BUILD_ARGS+=(--build-arg "${ARG}=${!VAR}")
 done
 
-SECRETS_DIR="$(mktemp -d --tmpdir="$(readlink -f .)" ".secrets-XXXXXX.tmp")"
+SECRETS_DIR="$(mktemp -d --tmpdir="${WORK_DIR}" ".secrets-XXXXXX.tmp")"
 mkdir -p "${SECRETS_DIR}"
 
 # Next, add all the stuff S3 will need to pull crap
@@ -141,13 +152,10 @@ TARGETS+=("${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}")
 
 # Set the build tags to be built. Make sure to cover
 # both targets if applicable
-TAGS=()
-echo "export BUILDS=()" | to_env
+BUILDS=()
 for T in "${TARGETS[@]}" ; do
 	for R in "${REVISIONS[@]}" ; do
-		BUILD="${T}:${R}"
-		echo "BUILDS+=(${BUILD@Q})" | to_env
-		TAGS+=("${BUILD}")
+		BUILDS+=("${T}:${R}")
 	done
 done
 
@@ -183,9 +191,6 @@ if [ -z "${REVISION_PRERELEASE}" ] ; then
 	# components
 	[ ${DOTS} -ge 2 ] && RE_MINOR_SELECTOR+="${RE_MINOR}+"
 
-	# Print out the tags from the image information
-	JQ_FIND_IMAGE_TAGS='.imageDetails[] | select(has("imageTags")) | .imageTags[]'
-
 	# Now let's figure out where this specific build version fits
 	# with respect to all the others. This needs to be done twice
 	# because the public versions may differ from the private ones
@@ -211,13 +216,21 @@ if [ -z "${REVISION_PRERELEASE}" ] ; then
 		# Let's get the list of all the revisions, without the extra
 		# markers that are actually noise at this specific juncture. We
 		# do it like this so we only query the list twice.
-		ALL_REVISIONS="$(
-			aws "${ECR}" describe-images --repository-name "${QUERY}" | \
-			jq -r "${JQ_FIND_IMAGE_TAGS}" | \
-			grep -E "^${REVISION_PREFIX}${RE_REVISION_SELECTOR}$" | \
-			sed -e "s;^${REVISION_PREFIX};;g" | \
-			sort --version-sort --unique --reverse
-		)" || ALL_REVISIONS=""
+		if is_local_dev ; then
+			# TODO: get the tags using standard docker registry APIs ... how?!?!
+			:
+		else
+			# Print out the tags from the image information
+			JQ_FIND_IMAGE_TAGS='.imageDetails[] | select(has("imageTags")) | .imageTags[]'
+
+			ALL_REVISIONS="$(
+				aws "${ECR}" describe-images --repository-name "${QUERY}" | \
+				jq -r "${JQ_FIND_IMAGE_TAGS}" | \
+				grep -E "^${REVISION_PREFIX}${RE_REVISION_SELECTOR}$" | \
+				sed -e "s;^${REVISION_PREFIX};;g" | \
+				sort --version-sort --unique --reverse
+			)" || ALL_REVISIONS=""
+		fi
 
 		# We have a possible maximum of 3 "latest" tags to create:
 		#
@@ -297,9 +310,7 @@ if [ -z "${REVISION_PRERELEASE}" ] ; then
 		if "${IS_LATEST}" ; then
 			echo "Found latest ${LABEL} revision: ${REVISION_BASE_NUMBER}"
 			LATEST="${REVISION_PREFIX}latest"
-			BUILD="${REG}/${IMAGE_URI}:${LATEST}"
-			echo "BUILDS+=(${BUILD@Q})" | to_env
-			TAGS+=("${BUILD}")
+			BUILDS+=("${REG}/${IMAGE_URI}:${LATEST}")
 			"${LATEST_ADDED}" || REVISIONS+=("${LATEST}")
 			LATEST_ADDED="true"
 
@@ -311,9 +322,7 @@ if [ -z "${REVISION_PRERELEASE}" ] ; then
 		if "${IS_LATEST_MINOR}" ; then
 			echo "Found latest ${LABEL} minor revision: ${MINOR_REVISION}"
 			LATEST="${REVISION_PREFIX}${MINOR_REVISION}-latest"
-			BUILD="${REG}/${IMAGE_URI}:${LATEST}"
-			echo "BUILDS+=(${BUILD@Q})" | to_env
-			TAGS+=("${BUILD}")
+			BUILDS+=("${REG}/${IMAGE_URI}:${LATEST}")
 			"${LATEST_MINOR_ADDED}" || REVISIONS+=("${LATEST}")
 			LATEST_MINOR_ADDED="true"
 		fi
@@ -321,14 +330,14 @@ if [ -z "${REVISION_PRERELEASE}" ] ; then
 		if "${IS_LATEST_MAJOR}" ; then
 			echo "Found latest ${LABEL} major revision: ${MAJOR_REVISION}"
 			LATEST="${REVISION_PREFIX}${MAJOR_REVISION}-latest"
-			BUILD="${REG}/${IMAGE_URI}:${LATEST}"
-			echo "BUILDS+=(${BUILD@Q})" | to_env
-			TAGS+=("${BUILD}")
+			BUILDS+=("${REG}/${IMAGE_URI}:${LATEST}")
 			"${LATEST_MAJOR_ADDED}" || REVISIONS+=("${LATEST}")
 			LATEST_MAJOR_ADDED="true"
 		fi
 	done
 fi
+
+to_env_array BUILDS
 
 # We only build to a single tag b/c the security scanner pukes otherwise
 # (don't ask XD). We instead create out-of-band tags for the container
@@ -339,7 +348,7 @@ fi
 # We do it like this to avoid having to modify the "docker push"
 # section, below.
 AUTHORITATIVE_TAG="${ECR_REGISTRY_PRIVATE}/${IMAGE_URI}:${EXACT_REVISION}"
-echo "AUTHORITATIVE_TAG=${AUTHORITATIVE_TAG@Q}" | to_env
+to_env AUTHORITATIVE_TAG
 RC=0
 (
 	echo "Cleaning out the Docker system..."
@@ -369,10 +378,12 @@ fi
 
 # If we want to tag the repository, do so! Clobber any existing tags!
 echo "Creating Git tags for: ${REVISIONS[@]}"
-for R in "${REVISIONS[@]}" ; do
-	# Tags for GIT must be the *real* revision, with "+" instead of "_"
-	git tag --force "${TAG_PREFIX}/${R//_/+}"
-done
+if ! is_local_dev ; then
+	for R in "${REVISIONS[@]}" ; do
+		# Tags for GIT must be the *real* revision, with "+" instead of "_"
+		git tag --force "${TAG_PREFIX}/${R//_/+}"
+	done
+fi
 
 REPORT_TARGET_PATH="${IMAGE_URI}/${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}/b${GITHUB_RUN_NUMBER}-${TIMESTAMP}${REVISION_METADATA}"
 
@@ -392,7 +403,7 @@ esac
 # If we're building a non-main variant, append the variant
 [ "${VARIANT}" != "main" ] && ARTIFACT_IDENTIFIER+="-${VARIANT}"
 
-SCAN_DIR="$(readlink -f .)/security-scan"
+SCAN_DIR="${WORK_DIR}/security-scan"
 
 # TODO: account for the branch name!
 COMP_REPORT_BASE="compliance${ARTIFACT_IDENTIFIER}"
@@ -437,9 +448,4 @@ VARS=(
 
 	SCAN_REPORT_RETENTION_DAYS
 )
-
-for VAR in "${VARS[@]}" ; do
-	VAL="${!VAR}"
-	echo "${VAR}=${VAL@Q}" | to_env
-	echo "${VAR}=${VAL}" | to_github_env
-done
+to_env "${VARS[@]}"

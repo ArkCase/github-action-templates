@@ -6,9 +6,7 @@
 #
 : > "${ENV_FILE}"
 
-TIMESTAMP="$(date -u +%Y%m%d%H%M%S)"
-echo "export TIMESTAMP=${TIMESTAMP@Q}" | to_env
-echo "TIMESTAMP=${TIMESTAMP@Q}"
+to_env TIMESTAMP="$(date -u +%Y%m%d%H%M%S)"
 
 # If we're not given an explicit revision, and the
 # matrix revision is NOT the value "*", then this means
@@ -17,15 +15,9 @@ echo "TIMESTAMP=${TIMESTAMP@Q}"
 # a parameter given to us on invocation.
 [ -z "${PARAM_REVISION}" ] && [ "${MATRIX_REVISION}" != "*" ] && PARAM_REVISION="${MATRIX_REVISION}"
 
-echo "export PARAM_REVISION=${PARAM_REVISION@Q}" | to_env
-echo "PARAM_REVISION=${PARAM_REVISION@Q}"
-
-echo "export PARAM_PORTAL=${PARAM_PORTAL@Q}" | to_env
-echo "PARAM_PORTAL=${PARAM_PORTAL@Q}"
-
-export VARIANT="${MATRIX_VARIANT}"
-echo "export VARIANT=${VARIANT@Q}" | to_env
-echo "VARIANT=${VARIANT@Q}"
+to_env PARAM_REVISION
+to_env PARAM_PORTAL
+to_env VARIANT
 
 [ "${MATRIX_REVISION}" == "*" ] \
 	&& REVISION_SUFFIX="all" \
@@ -43,6 +35,13 @@ CANDIDATES=(
 	CANDIDATES+=( "all/${REVISION_SUFFIX}" "${VARIANT}/${REVISION_SUFFIX}" )
 
 ARGS_TEMP="$(mktemp --tmpdir="${GITHUB_ACTION_PATH}" ".build-args-XXXXXX.tmp")"
+
+cleanup()
+{
+	rm -rf "${ARGS_TEMP}" &>/dev/null
+}
+trap exit CLEANUP
+
 ARGS_DIR="${GITHUB_ACTION_PATH}/.build-args"
 for CANDIDATE in "${CANDIDATES[@]}" ; do
 	[[ "${CANDIDATE}" =~ ^(.*)/(.*)$ ]] || continue
@@ -112,7 +111,5 @@ done
 # Now we output the variables, only keeping the last definition
 # (this may be unnecessary, but is a good safety measure anyway)
 while read VAR ; do
-	VAL="$(grep "^${VAR}=" "${ARGS_TEMP}" | tail -1)"
-	echo "export ${VAL}" | to_env
-	echo "${VAL}"
-done < <( sed -e 's;=.*$;;g' < "${ARGS_TEMP}" | sort -u )
+	to_env "${VAR}"
+done < <( sort -u "${ARGS_TEMP}" )

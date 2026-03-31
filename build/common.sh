@@ -2,14 +2,41 @@
 
 set -euo pipefail
 
-to_env()
+has_value()
 {
-	cat >> "${ENV_FILE}"
+	local DECL="${1}"
+	[[ "${DECL}" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$ ]] && return 0
+	return 1
 }
 
-to_github_env()
+to_env()
 {
-	[ -n "${GITHUB_ENV:-}" ] && cat >> "${GITHUB_ENV}"
+	local KEY=""
+	local VALUE=""
+	local DECL=""
+
+	for VAR in "${@}" ; do
+		# If it's a full declaration,
+		if has_value "${VAR}" ; then
+			KEY="${BASH_REMATCH[1]}"
+			VALUE="${BASH_REMATCH[2]}"
+		else
+			KEY="${VAR}"
+			VALUE="${!VAR:-}"
+		fi
+		echo "declare -xg ${KEY}=${VALUE@Q}" >> "${ENV_FILE}"
+		[ -n "${GITHUB_ENV:-}" ] && echo "${KEY}=${VALUE}" >> "${GITHUB_ENV}"
+	done
+}
+
+to_env_array()
+{
+	for VAR in "${@}" ; do
+		has_value "${VAR}" && continue
+		[ -v "${VAR}" ] || continue
+		declare -xg "${VAR}"
+		declare -p "${VAR}"
+	done >> "${ENV_FILE}"
 }
 
 if [ -z "${GITHUB_ACTION_PATH:-}" ] ; then
