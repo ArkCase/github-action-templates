@@ -63,9 +63,6 @@ done |& sort &> "${MVN_GET_SECRETS}"
 BUILD_ARGS+=(--secret id=mvn_get_auth,src="${MVN_GET_SECRETS}")
 sha256sum "${MVN_GET_SECRETS}"
 
-# Mark as legacy if needed
-[ "${LEGACY}" == "true" ] && BUILD_ARGS+=(--label "LEGACY=${LEGACY}")
-
 # Final details for more complete information
 BUILD_ARGS+=(--label "GIT_REPOSITORY=${GITHUB_REPOSITORY}")
 BUILD_ARGS+=(--label "GIT_REF=${GITHUB_REF_NAME}")
@@ -382,7 +379,7 @@ REPORT_TARGET_PATH="${IMAGE_URI}/${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVI
 ARTIFACT_IDENTIFIER=""
 case "${GITHUB_REF_NAME}" in
 	main ) ;;
-	develop | legacy | develop-legacy ) ARTIFACT_IDENTIFIER=".${GITHUB_REF_NAME}" ;;
+	develop ) ARTIFACT_IDENTIFIER=".${GITHUB_REF_NAME}" ;;
 
 	# We only do vulnerability scanning for main, develop, and the FIPS branches
 	* ) SCAN_COMP="false" ; SCAN_VULN="false" ;;
