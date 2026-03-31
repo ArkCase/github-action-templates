@@ -118,6 +118,11 @@ on:
         required: false
 
 jobs:
+
+  #
+  # First, compute the build matrix for this run. This means that if the container
+  # requires several versions/variants to be built, then these must be enumerated
+  #
   Compute-Revisions:
     runs-on: ubuntu-24.04
 
@@ -138,6 +143,9 @@ jobs:
       revisions: ${{ steps.compute-matrix.revisions.outputs.value }}
       variants: ${{ steps.compute-matrix.variants.outputs.value }}
 
+  #
+  # Once we've figured out which builds we need to run, we run them!
+  #
   Build-and-Publish:
     needs: [ "Compute-Revisions" ]
     runs-on: ubuntu-24.04
