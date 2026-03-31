@@ -1,0 +1,48 @@
+{
+	"Version": "2012-10-17",
+	"Statement": [
+		{
+			"Sid": "org-ecr-read",
+			"Effect": "Allow",
+			"Principal": "*",
+			"Action": [
+				"ecr:BatchCheckLayerAvailability",
+				"ecr:BatchGetImage",
+				"ecr:DescribeImageScanFindings",
+				"ecr:DescribeImages",
+				"ecr:DescribeRepositories",
+				"ecr:GetDownloadUrlForLayer",
+				"ecr:GetLifecyclePolicy",
+				"ecr:GetLifecyclePolicyPreview",
+				"ecr:GetRepositoryPolicy",
+				"ecr:ListImages",
+				"ecr:ListTagsForResource"
+			],
+			"Condition": {
+				"ForAnyValue:StringEquals": {
+					"aws:PrincipalOrgID": [ $AWS_ORG_ID ]
+				}
+			}
+		},
+		{
+			"Sid": "vendor-ecr-read",
+			"Effect": "Allow",
+			"Principal": {
+				"AWS": "arn:aws:iam::076340917683:root"
+			},
+			"Action": [
+				"ecr:BatchCheckLayerAvailability",
+				"ecr:BatchGetImage",
+				"ecr:DescribeImageScanFindings",
+				"ecr:DescribeImages",
+				"ecr:DescribeRepositories",
+				"ecr:GetDownloadUrlForLayer",
+				"ecr:GetLifecyclePolicy",
+				"ecr:GetLifecyclePolicyPreview",
+				"ecr:GetRepositoryPolicy",
+				"ecr:ListImages",
+				"ecr:ListTagsForResource"
+			]
+		}
+	]
+}
