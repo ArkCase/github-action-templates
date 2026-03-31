@@ -28,11 +28,6 @@ inputs:
     type: boolean
     default: false
 
-  reports-bucket:
-    description: "The bucket into which to upload the STIG Compliance and Vulnerability reports (defaults to 'arkcase-container-scan-results')"
-    required: false
-    type: string
-
   aws-org-id:
     description: "The AWS Organization ID"
     required: true
@@ -111,6 +106,11 @@ inputs:
 
   scanner-image:
     description: "The contiainer image to use for vulnerability and compliance scanning"
+    required: false
+    type: string
+
+  reports-bucket:
+    description: "The bucket into which to upload the STIG Compliance and Vulnerability reports (defaults to 'arkcase-container-scan-results')"
     required: false
     type: string
 
