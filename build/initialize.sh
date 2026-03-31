@@ -43,7 +43,7 @@ CANDIDATES=(
 	CANDIDATES+=( "all/${REVISION_SUFFIX}" "${VARIANT}/${REVISION_SUFFIX}" )
 
 ARGS_TEMP="$(mktemp --tmpdir="${GITHUB_ACTION_PATH}" ".build-args-XXXXXX.tmp")"
-ARGS_DIR="${WORK_DIR}/.build-args"
+ARGS_DIR="${GITHUB_ACTION_PATH}/.build-args"
 for CANDIDATE in "${CANDIDATES[@]}" ; do
 	[[ "${CANDIDATE}" =~ ^(.*)/(.*)$ ]] || continue
 
