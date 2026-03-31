@@ -30,16 +30,6 @@ to_env()
 	done
 }
 
-to_env_array()
-{
-	for VAR in "${@}" ; do
-		has_value "${VAR}" && continue
-		[ -v "${VAR}" ] || continue
-		declare -xg "${VAR}"
-		declare -p "${VAR}"
-	done >> "${ENV_FILE}"
-}
-
 if [ -z "${GITHUB_ACTION_PATH:-}" ] ; then
 	THIS_SCRIPT="$(readlink -f "${BASH_ARGV0:-${BASH_SOURCE:-${0}}}")"
 	export GITHUB_ACTION_PATH="$(dirname "${THIS_SCRIPT}")"
