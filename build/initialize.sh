@@ -1,11 +1,9 @@
 #!/bin/bash
+. "${GITHUB_ACTION_FILE}/common.sh"
 
-to_env()
-{
-	cat >> "${ENV_FILE}"
-}
-
-# Start with a clean environment
+#
+# Clear out the environment file!
+#
 : > "${ENV_FILE}"
 
 TIMESTAMP="$(date -u +%Y%m%d%H%M%S)"
@@ -44,8 +42,8 @@ CANDIDATES=(
 [ -n "${REVISION_SUFFIX}" ] && [ "${REVISION_SUFFIX}" != "all" ] && \
 	CANDIDATES+=( "all/${REVISION_SUFFIX}" "${VARIANT}/${REVISION_SUFFIX}" )
 
-ARGS_TEMP="$(mktemp --tmpdir="$(readlink -f .)" ".build-args-XXXXXX.tmp")"
-ARGS_DIR="${GITHUB_WORKSPACE}/.build-args"
+ARGS_TEMP="$(mktemp --tmpdir="${GITHUB_ACTION_PATH}" ".build-args-XXXXXX.tmp")"
+ARGS_DIR="${WORK_DIR}/.build-args"
 for CANDIDATE in "${CANDIDATES[@]}" ; do
 	[[ "${CANDIDATE}" =~ ^(.*)/(.*)$ ]] || continue
 
@@ -118,4 +116,3 @@ while read VAR ; do
 	echo "export ${VAL}" | to_env
 	echo "${VAL}"
 done < <( sed -e 's;=.*$;;g' < "${ARGS_TEMP}" | sort -u )
-rm -rf "${ARGS_TEMP}"
