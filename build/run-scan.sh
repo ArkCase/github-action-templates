@@ -1,7 +1,5 @@
 #!/bin/bash
-#
-#
-set -euo pipefail
+. "${GITHUB_ACTION_FILE}/common.sh"
 
 echo "Launching the ${SCAN_TYPE^^} Scan for ${AUTHORITATIVE_TAG}..."
 DOCKER_SOCKET="/var/run/docker.sock"
