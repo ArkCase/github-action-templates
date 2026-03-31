@@ -408,3 +408,7 @@ runs:
       if: ${{ (env.LOCAL_DEV != 'true') || (env.LOCAL_PUBLISH == 'true') }}
       run: |
         "${GITHUB_ACTION_PATH}/publish.sh"
+
+    - name: Cleanup
+      run: |
+        "${GITHUB_ACTION_PATH}/cleanup.sh"
