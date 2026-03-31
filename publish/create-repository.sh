@@ -15,8 +15,6 @@ fi
 
 . "${ENV_FILE}"
 
-"${PUSH_TO_PUBLIC}" || exit 0
-
 # All images have private repositories
 echo "Creating the private repository for ${IMAGE_URI}..."
 aws ecr create-repository \
@@ -25,6 +23,8 @@ aws ecr create-repository \
 	--image-tag-mutability MUTABLE \
 	--image-scanning-configuration scanOnPush=true \
 	--encryption-configuration encryptionType="AES256" || true
+
+"${PUSH_TO_PUBLIC}" || exit 0
 
 IMAGE_REAL_URI="${IMAGE_URI}"
 [[ "${IMAGE_URI}" =~ ^arkcase/(.*)$ ]] && IMAGE_REAL_URI="${BASH_REMATCH[1]}"
