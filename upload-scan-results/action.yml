@@ -1,0 +1,99 @@
+name: upload-scan-results
+description: "Upload the scan results to GitHub and S3"
+
+inputs:
+  results-directory:
+    description: "The directory from which the results are to be read"
+    required: true
+    type: string
+
+  results-suffix:
+    description: "The suffix to append to the report names"
+    required: false
+    type: string
+    default: ""
+
+  reports-bucket:
+    description: "The bucket into which to upload the scan reports (defaults to 'arkcase-container-scan-results')"
+    required: false
+    type: string
+    default: "arkcase-container-scan-results"
+
+  aws-region:
+    description: "The AWS region"
+    required: true
+    type: string
+
+  aws-access-key-id:
+    description: "The AWS Access Key ID"
+    required: true
+    type: string
+
+  aws-secret-access-key:
+    description: "The AWS Secret Access Key"
+    required: true
+    type: string
+
+runs:
+  steps:
+    - name: Upload the STIG compliance report to the GitHub Artifacts tab
+      if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
+      uses: actions/upload-artifact@v6
+      with:
+        name: ${{ env.COMP_REPORT_BASE }}
+        path: ${{ env.COMP_REPORT_PATTERN }}
+        retention-days: ${{ env.SCAN_REPORT_RETENTION_DAYS }}
+
+    - name: Upload the STIG compliance report to the GitHub Security tab
+      if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: ${{ env.COMP_REPORT_SARIF_SOURCE }}
+        category: stig-compliance
+
+    - name: Upload the STIG compliance report to S3
+      if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
+      env:
+        REPORTS_BUCKET: ${{ inputs.reports-bucket }}
+      run: |
+        source "${ENV_FILE}"
+        cat "${ENV_FILE}"
+        COUNT=0
+        while read SRC ; do
+            echo "Uploading [${SRC}] to [s3://${REPORTS_BUCKET}/${REPORT_TARGET_PATH}]..."
+            aws s3 cp "${SRC}" "s3://${REPORTS_BUCKET}/${REPORT_TARGET_PATH}/${SRC##*/}"
+            (( ++COUNT ))
+        done < <(find . -mindepth 1 -maxdepth 1 -type f -name "${COMP_REPORT_PATTERN}" | sort | cut -c3-)
+        [ ${COUNT} -eq 0 ] || echo "Uploaded ${COUNT} report(s)!"
+
+    - name: Upload the vulnerabilities reports to the GitHub artifacts tab
+      if: ${{ hashFiles(env.VULN_REPORT_JSON_SOURCE) != '' }}
+      uses: actions/upload-artifact@v6
+      with:
+        name: ${{ env.VULN_REPORT_BASE }}
+        path: ${{ env.VULN_REPORT_PATTERN }}
+        retention-days: ${{ env.SCAN_REPORT_RETENTION_DAYS }}
+
+    - name: Upload the vulnerabilities report to the GitHub Security tab
+      if: ${{ hashFiles(env.VULN_REPORT_SARIF_SOURCE) != '' }}
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: ${{ env.VULN_REPORT_SARIF_SOURCE }}
+        category: vulnerabilities
+
+    - name: Upload the vulnerabilities report to S3
+      if: ${{ hashFiles(env.VULN_REPORT_JSON_SOURCE) != '' }}
+      env:
+        REPORTS_BUCKET: ${{ inputs.reports-bucket }}
+      run: |
+        source "${ENV_FILE}"
+        cat "${ENV_FILE}"
+        COUNT=0
+        while read SRC ; do
+            echo "Uploading [${SRC}] to [s3://${REPORTS_BUCKET}/${REPORT_TARGET_PATH}]..."
+            aws s3 cp "${SRC}" "s3://${REPORTS_BUCKET}/${REPORT_TARGET_PATH}/${SRC##*/}"
+            (( ++COUNT ))
+        done < <(find . -mindepth 1 -maxdepth 1 -type f -name "${VULN_REPORT_PATTERN}" | sort | cut -c3-)
+        [ ${COUNT} -eq 0 ] || echo "Uploaded ${COUNT} report(s)!"
