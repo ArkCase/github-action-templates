@@ -1,0 +1,48 @@
+name: Build Armedia Docker Containers
+inputs:
+  matrix-revision:
+    description: "The matrix revision being built"
+    required: false
+    type: string
+    default: "*"
+
+  matrix-variant:
+    description: "The matrix variant being built"
+    required: false
+    type: string
+    default: "main"
+
+  revision:
+    description: "The revision number to use for construction (computed from the Dockerfile if not provided)"
+    required: false
+    type: string
+
+  portal:
+    description: "The FOIA Portal version to use for construction (computed from the Dockerfile if not provided)"
+    required: false
+    type: string
+
+  env-file:
+    descriptoin: "The file onto which to write out any environment settings to propagate outward"
+    required: false
+    type: string
+
+runs:
+  using: composite
+  steps:
+    - id: initialize
+      name: Initialize the environment file
+      env:
+        MATRIX_REVISION: ${{ inputs.matrix-revision }}
+        MATRIX_VARIANT: ${{ inputs.matrix-variant }}
+        PARAM_REVISION: ${{ inputs.revision }}
+        PARAM_PORTAL: ${{ inputs.portal }}
+        ENV_FILE: ${{ inputs.env-file }}
+        RE_FULL_REVISION: "^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$"
+      run: |
+        "${GITHUB_ACTION_PATH}/initialize.sh" >> "${GITHUB_OUTPUT}"
+
+outputs:
+  env-file:
+    description: "The file into which the environment outputs were written out"
+    value: ${{ steps.initialize.outputs.value }}
