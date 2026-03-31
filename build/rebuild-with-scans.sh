@@ -3,7 +3,9 @@
 
 echo "Attaching scan results to ${AUTHORITATIVE_TAG}..."
 
+#
 # Compute the list of reports to be added
+#
 SECURITY_REPORTS_BUNDLE="security-reports.tar.gz"
 FILE_LIST="security-reports.list.${GITHUB_RUN_NUMBER}"
 (
@@ -20,21 +22,33 @@ echo "Reports bundle ready! Creating a backup tag (${BACKUP_TAG}) ..."
     exec docker tag "${AUTHORITATIVE_TAG}" "${BACKUP_TAG}"
 ) || exit ${?}
 
+#
+# Create a new Dockerfile including the reports tarfile
+#
 DF="Dockerfile.with-reports.${GITHUB_RUN_NUMBER}"
 cat <<EOF > "${DF}"
 FROM "${AUTHORITATIVE_TAG}"
 COPY --chown=root:root --chmod=0444 "${SECURITY_REPORTS_BUNDLE}" "/${SECURITY_REPORTS_BUNDLE}"
 EOF
 
-# This time we add all the tags up front, since this will no longer be
-# scanned
+#
+# BUILDS is a CSV whose values can't have spaces, so split it!
+#
+BUILDS=( ${BUILDS//,/ } )
+
+#
+# This time we add all the tags up front, since this will
+# no longer be scanned and OSCAP won't puke on our build
+#
 echo "Computing extra tags ..."
 EXTRA_TAGS=()
 for BUILD in "${BUILDS[@]}" ; do
     [ "${AUTHORITATIVE_TAG}" == "${BUILD}" ] || EXTRA_TAGS+=( --tag "${BUILD}" )
 done
 
+#
 # No build args needed here b/c we don't need'em
+#
 (
     set -x
     exec docker build --file "${DF}" --tag "${AUTHORITATIVE_TAG}" "${EXTRA_TAGS[@]}" .
