@@ -180,9 +180,9 @@ jobs:
 
           # AWS Access Secrets
           aws-org-id: ${{ secrets.ECR_AWS_ORG_ID }}
-          aws-region: ${{ secrets.AWS_REGION }}
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.ECR_AWS_REGION }}
+          aws-access-key-id: ${{ secrets.ECR_AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
 
           # Alfresco's Quay.IO Credentials
           alf-quay-io-username: ${{ secrets.ALF_QUAY_IO_USERNAME }}
