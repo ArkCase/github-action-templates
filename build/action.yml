@@ -266,18 +266,36 @@ runs:
       run: |
        "${GITHUB_ACTION_PATH}/build.sh"
 
-    - name: Run the security scans
+    - name: Clear out the results directory
+      env:
+        SCAN_COMP: ${{ inputs.compliance-scan }}
+        SCAN_VULN: ${{ inputs.vulnerabilities-scan }}
       if: ${{ (env.SCAN_COMP == 'true') || (env.SCAN_VULN == 'true') }}
-      uses: arkcase/github-action-templates/scan-container@main
-      with:
-        container-image: ${{ env.AUTHORITATIVE_TAG }}
-        scanner-image: ${{ inputs.scanner-image }}
-        results-directory: ${{ env.SCAN_DIR }}
-        results-suffix: ${{ env.ARTIFACT_IDENTIFIER }}
-        compliance-scan: ${{ inputs.compliance-scan }}
-        compliance-required: ${{ inputs.compliance-required }}
-        vulnerabilities-scan: ${{ inputs.vulnerabilities-scan }}
-        vulnerabilities-required: ${{ inputs.vulnerabilities-required }}
+      run:
+        [ -d "${SCAN_DIR}" ] && rm -rf "${SCAN_DIR}"
+        mkdir -p "${SCAN_DIR}"
+
+    - name: Scan for STIG compliance
+      if: ${{ env.SCAN_COMP == 'true' }}
+      env:
+        SCAN_COMP: ${{ inputs.compliance-scan }}
+        SCAN_COMP_REQUIRED: ${{ inputs.compliance-required }}
+        SCAN_TYPE: "compliance"
+        SCANNER_IMAGE: ${{ inputs.scanner-image }}
+      run: |
+        "${GITHUB_ACTION_PATH}/run-scan.sh"
+      continue-on-error: ${{ env.SCAN_COMP_REQUIRED != 'true' }}
+
+    - name: Scan for vulnerabilities
+      env:
+        SCAN_VULN: ${{ inputs.vulnerabilities-scan }}
+        SCAN_VULN_REQUIRED: ${{ inputs.vulnerabilities-required }}
+        SCAN_TYPE: "vulnerabilities"
+        SCANNER_IMAGE: ${{ inputs.scanner-image }}
+      if: ${{ env.SCAN_VULN == 'true' }}
+      run: |
+        "${GITHUB_ACTION_PATH}/run-scan.sh"
+      continue-on-error: ${{ env.SCAN_VULN_REQUIRED != 'true' }}
 
     - name: Upload the STIG compliance report to the GitHub Artifacts tab
       env:
