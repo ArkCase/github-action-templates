@@ -201,7 +201,7 @@ runs:
         password: ${{ env.PASSWORD }}
 
     - name: Configure AWS credentials
-      if: ${{ env.LOCAL_REGISTRY == '' }}
+      if: ${{ env.LOCAL_DEV != 'true' }}
       uses: aws-actions/configure-aws-credentials@v6
       with:
         aws-region: ${{ inputs.aws-region }}
@@ -213,14 +213,14 @@ runs:
       # ECR_REGISTRY_PRIVATE value is computed here
     - id: login-ecr-private
       name: Login to Amazon ECR (Private)
-      if: ${{ env.LOCAL_REGISTRY == '' }}
+      if: ${{ env.LOCAL_DEV != 'true' }}
       uses: aws-actions/amazon-ecr-login@v2
 
       # The AWS login needs to happen before the build b/c the
       # ECR_REGISTRY_PUBLIC value is computed here
     - id: login-ecr-public
       name: Login to Amazon ECR (Public)
-      if: ${{ env.LOCAL_REGISTRY == '' }}
+      if: ${{ env.LOCAL_DEV != 'true' }}
       uses: aws-actions/amazon-ecr-login@v2
       with:
         registry-type: public
@@ -290,7 +290,7 @@ runs:
       continue-on-error: ${{ env.SCAN_VULN_REQUIRED != 'true' }}
 
     - name: Upload the STIG compliance report to the GitHub Artifacts tab
-      if: ${{ (env.LOCAL_REGISTRY == '') && (hashFiles(env.COMP_REPORT_XML_SOURCE) != '') }}
+      if: ${{ (env.LOCAL_DEV != 'true') && (hashFiles(env.COMP_REPORT_XML_SOURCE) != '') }}
       uses: actions/upload-artifact@v6
       with:
         name: ${{ env.COMP_REPORT_BASE }}
@@ -298,7 +298,7 @@ runs:
         retention-days: ${{ env.SCAN_REPORT_RETENTION_DAYS }}
 
     - name: Upload the STIG compliance report to the GitHub Security tab
-      if: ${{ (env.LOCAL_REGISTRY == '') && (hashFiles(env.COMP_REPORT_XML_SOURCE) != '') }}
+      if: ${{ (env.LOCAL_DEV != 'true') && (hashFiles(env.COMP_REPORT_XML_SOURCE) != '') }}
       uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: ${{ env.COMP_REPORT_SARIF_SOURCE }}
@@ -310,12 +310,12 @@ runs:
         TYPE: "compliance"
         REPORTS_BUCKET: ${{ inputs.reports-bucket }}
         PATTERN: ${{ env.COMP_REPORT_PATTERN }}
-      if: ${{ (env.LOCAL_REGISTRY == '') && (hashFiles(env.COMP_REPORT_XML_SOURCE) != '') }}
+      if: ${{ (env.LOCAL_DEV != 'true') && (hashFiles(env.COMP_REPORT_XML_SOURCE) != '') }}
       run: |
         "${GITHUB_ACTION_PATH}/upload-reports.sh" 
 
     - name: Upload the vulnerabilities reports to the GitHub artifacts tab
-      if: ${{ (env.LOCAL_REGISTRY == '') && (hashFiles(env.VULN_REPORT_JSON_SOURCE) != '') }}
+      if: ${{ (env.LOCAL_DEV != 'true') && (hashFiles(env.VULN_REPORT_JSON_SOURCE) != '') }}
       uses: actions/upload-artifact@v6
       with:
         name: ${{ env.VULN_REPORT_BASE }}
@@ -323,7 +323,7 @@ runs:
         retention-days: ${{ env.SCAN_REPORT_RETENTION_DAYS }}
 
     - name: Upload the vulnerabilities report to the GitHub Security tab
-      if: ${{ (env.LOCAL_REGISTRY == '') && (hashFiles(env.VULN_REPORT_SARIF_SOURCE) != '') }}
+      if: ${{ (env.LOCAL_DEV != 'true') && (hashFiles(env.VULN_REPORT_SARIF_SOURCE) != '') }}
       uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: ${{ env.VULN_REPORT_SARIF_SOURCE }}
@@ -335,7 +335,7 @@ runs:
         TYPE: "vulnerabilities"
         REPORTS_BUCKET: ${{ inputs.reports-bucket }}
         PATTERN: ${{ env.VULN_REPORT_PATTERN }}
-      if: ${{ (env.LOCAL_REGISTRY == '') && (hashFiles(env.VULN_REPORT_JSON_SOURCE) != '') }}
+      if: ${{ (env.LOCAL_DEV != 'true') && (hashFiles(env.VULN_REPORT_JSON_SOURCE) != '') }}
       run: |
         "${GITHUB_ACTION_PATH}/upload-reports.sh" 
 
@@ -345,7 +345,7 @@ runs:
         "${GITHUB_ACTION_PATH}/rebuild-with-scans.sh"
 
     - name: Push the new tags
-      if: ${{ env.LOCAL_REGISTRY == '' }}
+      if: ${{ env.LOCAL_DEV != 'true' }}
       run: |
         "${GITHUB_ACTION_PATH}/push-tags.sh"
 
@@ -353,7 +353,7 @@ runs:
       env:
         IMAGE_URI: ${{ inputs.image-uri }}
         AWS_REGION: ${{ inputs.aws-region }}
-      if: ${{ env.LOCAL_REGISTRY == '' }}
+      if: ${{ env.LOCAL_DEV != 'true' }}
       run: |
         "${GITHUB_ACTION_PATH}/create-repository.sh"
 
@@ -362,7 +362,7 @@ runs:
         IMAGE_URI: ${{ inputs.image-uri }}
         AWS_ORG_ID: ${{ inputs.aws-org-id }}
         AWS_REGION: ${{ inputs.aws-region }}
-      if: ${{ env.LOCAL_REGISTRY == '' }}
+      if: ${{ env.LOCAL_DEV != 'true' }}
       run: |
         "${GITHUB_ACTION_PATH}/permissions.sh"
 
@@ -372,11 +372,11 @@ runs:
         AWS_REGION: ${{ inputs.aws-region }}
         SNAPSHOT_KEEP_DAYS: ${{ inputs.snapshot-keep-days }}
         DEVEL_KEEP_DAYS: ${{ inputs.devel-keep-days }}
-      if: ${{ env.LOCAL_REGISTRY == '' }}
+      if: ${{ env.LOCAL_DEV != 'true' }}
       run: |
         "${GITHUB_ACTION_PATH}/lifecycle-policy.sh"
 
     - name: Publish the Docker Image (and all its tags)
-      if: ${{ (env.LOCAL_REGISTRY == '') || (env.LOCAL_PUBLISH == 'true') }}
+      if: ${{ (env.LOCAL_DEV != 'true') || (env.LOCAL_PUBLISH == 'true') }}
       run: |
         "${GITHUB_ACTION_PATH}/publish.sh"

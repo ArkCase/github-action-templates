@@ -29,3 +29,9 @@ to_env()
 		echo "${DECL}" >> "${GITHUB_ENV}"
 	done
 }
+
+is_local_dev()
+{
+	[ "${LOCAL_DEV:-}" == "true" ] || return 1
+	return 0
+}
