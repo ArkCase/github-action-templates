@@ -1,5 +1,5 @@
 #!/bin/bash
-. "${GITHUB_ACTION_FILE}/common.sh"
+. "${GITHUB_ACTION_PATH}/common.sh"
 
 # All images have private repositories
 echo "Creating the private repository for ${IMAGE_URI}..."

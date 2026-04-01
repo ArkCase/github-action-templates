@@ -1,5 +1,5 @@
 #!/bin/bash
-. "${GITHUB_ACTION_FILE}/common.sh"
+. "${GITHUB_ACTION_PATH}/common.sh"
 
 echo "Launching the ${SCAN_TYPE^^} Scan for ${AUTHORITATIVE_TAG}..."
 DOCKER_SOCKET="/var/run/docker.sock"

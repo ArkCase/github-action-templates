@@ -1,5 +1,5 @@
 #!/bin/bash
-. "${GITHUB_ACTION_FILE}/common.sh"
+. "${GITHUB_ACTION_PATH}/common.sh"
 
 echo "Attaching scan results to ${AUTHORITATIVE_TAG}..."
 

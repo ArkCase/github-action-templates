@@ -1,5 +1,5 @@
 #!/bin/bash
-. "${GITHUB_ACTION_FILE}/common.sh"
+. "${GITHUB_ACTION_PATH}/common.sh"
 
 #
 # BUILDS is a CSV whose values can't have spaces, so split it!

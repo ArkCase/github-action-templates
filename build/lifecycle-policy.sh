@@ -1,5 +1,5 @@
 #!/bin/bash
-. "${GITHUB_ACTION_FILE}/common.sh"
+. "${GITHUB_ACTION_PATH}/common.sh"
 
 JSON="$(mktemp --tmpdir="${GITHUB_ACTION_PATH}" "lifecycle-policy-XXXXXXXX.json")"
 TEMPLATE="${GITHUB_ACTION_PATH}/lifecycle-policy-template.json"
