@@ -20,10 +20,8 @@ to_env LOCAL_DEV LOCAL_REGISTRY LOCAL_REGISTRY_USERNAME LOCAL_REGISTRY_PASSWORD 
 # we treat the value from MATRIX_REVISION as if it were
 # a parameter given to us on invocation.
 [ -z "${PARAM_REVISION}" ] && [ "${MATRIX_REVISION}" != "*" ] && PARAM_REVISION="${MATRIX_REVISION}"
-
-to_env PARAM_REVISION
-to_env PARAM_PORTAL
-to_env VARIANT
+to_env MATRIX_REVISION VARIANT="${MATRIX_VARIANT}"
+to_env PARAM_REVISION PARAM_PORTAL
 
 [ "${MATRIX_REVISION}" == "*" ] \
 	&& REVISION_SUFFIX="all" \

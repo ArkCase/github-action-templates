@@ -252,9 +252,6 @@ runs:
 
     - name: Build the Docker image
       env:
-        MATRIX_REVISION: ${{ inputs.matrix-revision }}
-        ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr-private.outputs.registry }}
-        ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
         ECR_AWS_REGION: ${{ inputs.aws-region }}
         ECR_AWS_ACCESS_KEY: ${{ inputs.aws-access-key-id }}
         ECR_AWS_SECRET_ACCESS_KEY: ${{ inputs.aws-secret-access-key }}
