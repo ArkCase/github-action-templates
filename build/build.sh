@@ -159,9 +159,9 @@ if [ -z "${REVISION_PRERELEASE}" ] ; then
 	#
 
 	# This is important: the number of dots will help us figure out
-	# the regulare expressions to use below when seeking out the full
+	# the regular expressions to use below when seeking out the full
 	# version numbers, vs. just the partial ones
-	DOTS="$(echo "${REVISION_BASE_NUMBER}" | fgrep -o "." | wc -l)"
+	DOTS="$(echo "${REVISION_BASE_NUMBER}" | fgrep -o "." | wc -l)" || true
 
 	# Since we know we won't have any pre-release stuff, we can
 	# construct this selector regex to not allow any pre-release
