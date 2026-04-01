@@ -31,5 +31,5 @@ readarray -t VARIANTS < <(
 )
 
 # This should yield the required output
-echo "value=[${VARIANTS[@]@Q}]" | tr ' ' ',' | tr "'" '"'
+echo "value=[${VARIANTS[@]@Q}]" | tr ' ' ',' | tr "'" '"' >> "${GITHUB_OUTPUT}"
 exit 0

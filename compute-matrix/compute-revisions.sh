@@ -10,7 +10,7 @@ set -euo pipefail
 if [ -n "${PARAM_REVISION}" ] ; then
 	if [[ "${PARAM_REVISION}" =~ ${RE_FULL_REVISION} ]] ; then
 		echo -e "The REVISION parameter was given with the value [${PARAM_REVISION}]"
-		echo "value=[${PARAM_REVISION@Q}]" | tr ' ' ',' | tr "'" '"'
+		echo "value=[${PARAM_REVISION@Q}]" | tr ' ' ',' | tr "'" '"' >> "${GITHUB_OUTPUT}"
 		exit ${?}
 	fi
 	echo "Revision number is not valid: [${PARAM_REVISION}] (must match /${RE_FULL_REVISION}/ )"
@@ -102,5 +102,5 @@ else
 fi
 
 # This should yield the required output
-echo "value=[${REVISIONS[@]@Q}]" | tr ' ' ',' | tr "'" '"'
+echo "value=[${REVISIONS[@]@Q}]" | tr ' ' ',' | tr "'" '"' >> "${GITHUB_OUTPUT}"
 exit 0
