@@ -264,7 +264,7 @@ runs:
 
     - name: Build the Docker image
       env:
-        MATRIX_REVISION: ${{ input.matrix-revision }}
+        MATRIX_REVISION: ${{ inputs.matrix-revision }}
         LOCAL_REGISTRY: ${{ inputs.local-registry }}
         ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr-private.outputs.registry }}
         ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
@@ -285,7 +285,7 @@ runs:
         SCAN_COMP: ${{ inputs.compliance-scan }}
         SCAN_VULN: ${{ inputs.vulnerabilities-scan }}
       if: ${{ (env.SCAN_COMP == 'true') || (env.SCAN_VULN == 'true') }}
-      run:
+      run: |
         [ -d "${SCAN_DIR}" ] && rm -rf "${SCAN_DIR}"
         mkdir -p "${SCAN_DIR}"
 
