@@ -3,6 +3,8 @@
 #
 set -euo pipefail
 
+export RE_FULL_REVISION="^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$"
+
 # If we were given a non-empty input value for PARAM_REVISION,
 # then we simply output that and call it a day. Otherwise,
 # proceed with the computation. We also validate it early
