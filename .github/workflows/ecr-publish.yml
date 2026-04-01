@@ -117,6 +117,9 @@ on:
       MVN_GET_PASSWORD:
         required: false
 
+env:
+  GH_TOKEN: ${{ github.token }}
+
 jobs:
 
   #
@@ -156,9 +159,6 @@ jobs:
       matrix:
         revision: ${{ fromJSON(needs.Compute-Revisions.outputs.revisions) }}
         variant: ${{ fromJSON(needs.Compute-Revisions.outputs.variants) }}
-
-    env:
-      GH_TOKEN: ${{ github.token }}
 
     steps:
       # This is inefficient, but necessary b/c we may not share
