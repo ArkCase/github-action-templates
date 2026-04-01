@@ -52,15 +52,11 @@ export IMAGE_URI="${PRODUCT_SUITE}/${IMAGE_NAME}"
 
 to_env PRODUCT_SUITE IMAGE_NAME IMAGE_URI
 
-if is_local_dev ; then
-	PRIVATE_REGISTRY="${LOCAL_REGISTRY}"
-	PUBLIC_REGISTRY="${LOCAL_REGISTRY}"
-else
-	PRIVATE_REGISTRY="${ECR_REGISTRY_PRIVATE}"
-	PUBLIC_REGISTRY="${ECR_REGISTRY_PUBLIC}"
-fi
-
-to_env PRIVATE_REGISTRY PUBLIC_REGISTRY
+#
+# Override, if necessary/appropriate ...
+#
+[ -n "${ECR_REGISTRY_PRIVATE:-}" ] && to_env PRIVATE_REGISTRY="${ECR_REGISTRY_PRIVATE}"
+[ -n "${ECR_REGISTRY_PUBLIC:-}" ] && to_env PUBLIC_REGISTRY="${ECR_REGISTRY_PUBLIC}"
 
 #
 # Make sure it's defined if it isn't already

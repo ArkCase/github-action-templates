@@ -154,6 +154,11 @@ inputs:
 runs:
   using: composite
   steps:
+    - id: detect-local
+      name: Detect Local Development
+      run: |
+        "${GITHUB_ACTION_PATH}/detect-local.sh"
+
     - id: initialize
       name: Initialize the Environment
       env:
@@ -188,7 +193,7 @@ runs:
         username: ${{ env.USERNAME }}
         password: ${{ env.PASSWORD }}
 
-    - name: Docker Login to the Local Registry
+    - name: Docker Login to the Local Registry (${{ env.LOCAL_REGISTRY }})
       env:
         REGISTRY: ${{ env.LOCAL_REGISTRY }}
         USERNAME: ${{ env.LOCAL_REGISTRY_USERNAME }}

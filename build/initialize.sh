@@ -3,17 +3,6 @@
 
 to_env TIMESTAMP="$(date -u +%Y%m%d%H%M%S)"
 
-#
-# Determine if we're doing local development or not
-#
-LOCAL_DEV="false"
-LOCAL_PUBLISH="false"
-if [ -n "${LOCAL_REGISTRY:-}" ] ; then
-	LOCAL_DEV="true"
-	[ -n "${LOCAL_REGISTRY_USERNAME:-}" ] && [ -n "${LOCAL_REGISTRY_PASSWORD:-}" ] && LOCAL_PUBLISH="true"
-fi
-to_env LOCAL_DEV LOCAL_REGISTRY LOCAL_REGISTRY_USERNAME LOCAL_REGISTRY_PASSWORD LOCAL_PUBLISH
-
 # If we're not given an explicit revision, and the
 # matrix revision is NOT the value "*", then this means
 # we have to build for a specific revision, and thus
