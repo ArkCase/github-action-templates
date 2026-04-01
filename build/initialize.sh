@@ -51,29 +51,17 @@ for CANDIDATE in "${CANDIDATES[@]}" ; do
 	BUILD_ARGS=""
 	RC=0
 	if [ -f "${SCRIPT}" ] ; then
-		if [ -x "${SCRIPT}" ] ; then
-			echo -e "ERROR: The build arguments script [${SCRIPT_NAME}] is not executable"
-			exit 1
-		fi
+		[ -x "${SCRIPT}" ] || fail "The build arguments script [${SCRIPT_NAME}] is not executable"
 		BUILD_ARGS="$( set -o allexport ; . "${ARGS_TEMP}" ; "${SCRIPT}" )" || RC=${?}
-		if [ ${RC} -ne 0 ] ; then
-			echo -e "ERROR: Failed to compute the build arguments from [${SCRIPT_NAME}] (rc=${RC}): ${BUILD_ARGS}"
-			exit 1
-		fi
+		[ ${RC} -eq 0 ] || fail "Failed to compute the build arguments from [${SCRIPT_NAME}] (rc=${RC}): ${BUILD_ARGS}"
 		echo -e "The script [${SCRIPT_NAME}] produced the following (raw) build arguments:"
 		echo -e "--------------------------------------------------------------------------------"
 		echo -e "${BUILD_ARGS}"
 		echo -e "--------------------------------------------------------------------------------"
 	elif [ -f "${FILE}" ] ; then
-		if [ -x "${FILE}" ] ; then
-			echo -e "ERROR: The build arguments file [${FILE_NAME}] is not readable"
-			exit 1
-		fi
+		[ -x "${FILE}" ] || fail "The build arguments file [${FILE_NAME}] is not readable"
 		BUILD_ARGS="$(<"${FILE}")" || RC=${?}
-		if [ ${RC} -ne 0 ] ; then
-			echo -e "ERROR: Failed to read the build arguments from [${FILE_NAME}] (rc=${RC})"
-			exit 1
-		fi
+		[ ${RC} -eq 0 ] || fail "Failed to read the build arguments from [${FILE_NAME}] (rc=${RC})"
 		echo -e "The file [${FILE_NAME}] produced the following (raw) build arguments:"
 		echo -e "--------------------------------------------------------------------------------"
 		echo -e "${BUILD_ARGS}"

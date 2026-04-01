@@ -152,10 +152,7 @@ if [ -z "${REVISION}" ] || [ -z "${PORTAL_VER}" ] ; then
 
 	# We only override the revision if it wasn't provided as a parameter
 	if [ -z "${REVISION}" ] ; then
-		if [ -z "${DOCKERFILE_VER}" ] ; then
-			echo "Failed to compute a build revision from the Dockerfile"
-			exit 1
-		fi
+		[ -n "${DOCKERFILE_VER}" ] || fail "Failed to compute a build revision from the Dockerfile"
 		REVISION="${DOCKERFILE_VER}"
 	fi
 
@@ -195,10 +192,7 @@ to_env PUBLISH_MAJOR PUBLISH_MINOR
 #
 # Otherwise, the rest is the same: same rules for pre-release tags and metadata tags.
 #
-if [[ ! "${REVISION}" =~ ${RE_FULL_REVISION} ]] ; then
-	echo "Revision number is not valid: [${REVISION}] ( /${RE_FULL_REVISION}/ )"
-	exit 1
-fi
+[[ "${REVISION}" =~ ${RE_FULL_REVISION} ]] || fail "Revision number is not valid: [${REVISION}] ( /${RE_FULL_REVISION}/ )"
 
 REVISION_BASE_NUMBER="${BASH_REMATCH[1]}"
 REVISION_PRERELEASE="${BASH_REMATCH[5]}"
@@ -209,22 +203,15 @@ REVISION_METADATA="${BASH_REMATCH[8]}"
 #
 REVISION_SNAPSHOT="false"
 if [[ "${REVISION_PRERELEASE}" =~ SNAPSHOT ]] ; then
-	if [[ "${REVISION_PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT ]] ; then
-		REVISION_SNAPSHOT="true"
-	else
-		echo "Illegal use of the word 'SNAPSHOT' as [${PRERELASE}] - must be the last word: [${REVISION}]"
-		exit 1
-	fi
+	[[ "${REVISION_PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT ]] || fail "Illegal use of the word 'SNAPSHOT' as [${PRERELASE}] - must be the last word: [${REVISION}]"
+	REVISION_SNAPSHOT="true"
 fi
 
 #
 # Do the same validation, but for the FOIA Portal version
 #
 if [ -n "${PORTAL_VER}" ] ; then
-	if [[ ! "${PORTAL_VER}" =~ ${RE_FULL_REVISION} ]] ; then
-		echo "The FOIA Portal version is not valid: [${PORTAL_VER}]"
-		exit 1
-	fi
+	[[ "${PORTAL_VER}" =~ ${RE_FULL_REVISION} ]] || fail "The FOIA Portal version is not valid: [${PORTAL_VER}]"
 
 	PORTAL_BASE_NUMBER="${BASH_REMATCH[1]}"
 	PORTAL_PRERELEASE="${BASH_REMATCH[5]}"
@@ -233,12 +220,8 @@ if [ -n "${PORTAL_VER}" ] ; then
 	# If the pre-release info is a "SNAPSHOT", make sure it's used properly
 	PORTAL_SNAPSHOT="false"
 	if [[ "${PORTAL_PRERELEASE}" =~ SNAPSHOT ]] ; then
-		if [[ "${PORTAL_PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT ]] ; then
-			PORTAL_SNAPSHOT="true"
-		else
-			echo "Illegal use of the word 'SNAPSHOT' as [${PRERELASE}] - must be the last word: [${PORTAL_VER}]"
-			exit 1
-		fi
+		[[ "${PORTAL_PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT ]] || fail "Illegal use of the word 'SNAPSHOT' as [${PRERELASE}] - must be the last word: [${PORTAL_VER}]"
+		PORTAL_SNAPSHOT="true"
 	fi
 
 	# Make sure that the quality level of the ArkCase build is
@@ -263,10 +246,7 @@ if [ -n "${PORTAL_VER}" ] ; then
 	fi
 	echo "PORTAL_QUALITY=${PORTAL_QUALITY}"
 
-	if [ ${REVISION_QUALITY} -gt ${PORTAL_QUALITY} ] ; then
-		echo "The target revision quality (${REVISION_QUALITY}) is higher than the Portal component quality (${PORTAL_QUALITY}), and this is not allowed"
-		exit 1
-	fi
+	[ ${REVISION_QUALITY} -le ${PORTAL_QUALITY} ] || fail "The target revision quality (${REVISION_QUALITY}) is higher than the Portal component quality (${PORTAL_QUALITY}), and this is not allowed"
 fi
 
 # Assume the default is "devel", until proven otherwise

@@ -3,11 +3,19 @@
 
 echo "Launching the ${SCAN_TYPE^^} Scan for ${AUTHORITATIVE_TAG}..."
 DOCKER_SOCKET="/var/run/docker.sock"
+
+CONTAINER_NAME_SUFFIX="${IMAGE_URI//\//-}"
+[ -n "${ARTIFACT_IDENTIFIER}" ] && CONTAINER_NAME_SUFFIX+="-${ARTIFACT_IDENTIFIER}"
+
+SCANNER_IMAGE="$(echo -n "${SCANNER_IMAGE}" | envsubst)"
+
+[ -n "${SCANNER_IMAGE}" ] || fail "No Scanner Image was given!"
+
 CMD=(
 	docker run
 		--rm
-		--name "${SCAN_TYPE}-scanner"
-		--env RESULTS_NAME="${SCAN_TYPE}${ARTIFACTS_IDENTIFIER}"
+		--name "${SCAN_TYPE}-${CONTAINER_NAME_SUFFIX}"
+		--env RESULTS_NAME="${SCAN_TYPE}${ARTIFACT_IDENTIFIER}"
 		--volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}"
 		--volume "${SCAN_DIR}:/results"
 		"${SCANNER_IMAGE}"

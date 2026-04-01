@@ -108,6 +108,7 @@ inputs:
     description: "The contiainer image to use for vulnerability and compliance scanning"
     required: false
     type: string
+    default: "${PRIVATE_REGISTRY}/arkcase/security-scanner:latest"
 
   reports-bucket:
     description: "The bucket into which to upload the STIG Compliance and Vulnerability reports (defaults to 'arkcase-container-scan-results')"
