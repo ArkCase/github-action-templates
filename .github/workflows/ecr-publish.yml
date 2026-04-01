@@ -143,8 +143,8 @@ jobs:
           portal: ${{ inputs.portal }}
 
     outputs:
-      revisions: ${{ steps.compute-matrix.revisions.outputs.value }}
-      variants: ${{ steps.compute-matrix.variants.outputs.value }}
+      revisions: ${{ steps.compute-matrix.outputs.revisions }}
+      variants: ${{ steps.compute-matrix.outputs.variants }}
 
   #
   # Once we've figured out which builds we need to run, we run them!
