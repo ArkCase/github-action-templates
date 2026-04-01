@@ -378,13 +378,17 @@ to_env REPORT_TARGET_PATH="${IMAGE_URI}/${REVISION_PREFIX}${REVISION_BASE_NUMBER
 ARTIFACT_IDENTIFIER=""
 SCAN_COMP="true"
 SCAN_VULN="true"
-case "${GITHUB_REF_NAME}" in
-	main ) ;;
-	develop ) ARTIFACT_IDENTIFIER=".${GITHUB_REF_NAME}" ;;
+if is_local_dev ; then
+	ARTIFACT_IDENTIFIER=".develop"
+else
+	case "${GITHUB_REF_NAME}" in
+		main ) ;;
+		develop ) ARTIFACT_IDENTIFIER=".${GITHUB_REF_NAME}" ;;
 
-	# We only do vulnerability scanning for main, develop, and the FIPS branches
-	* ) SCAN_COMP="false" ; SCAN_VULN="false" ;;
-esac
+		# We only do vulnerability scanning for main, develop, and the FIPS branches
+		* ) SCAN_COMP="false" ; SCAN_VULN="false" ;;
+	esac
+fi
 to_env SCAN_COMP SCAN_VULN
 
 # If we're running builds for multiple dynamic revisions,

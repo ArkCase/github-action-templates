@@ -255,9 +255,11 @@ fi
 export ENVIRONMENT="devel"
 export REVISION_PREFIX="devel-"
 # This makes it easier to add special branch handlers later on
-case "${GITHUB_REF}" in
-	"refs/heads/main" | "refs/tags/release"/* ) ENVIRONMENT="stable" ; REVISION_PREFIX="" ;;
-esac
+if ! is_local_dev ; then
+	case "${GITHUB_REF}" in
+		"refs/heads/main" | "refs/tags/release"/* ) ENVIRONMENT="stable" ; REVISION_PREFIX="" ;;
+	esac
+fi
 to_env ENVIRONMENT REVISION_PREFIX
 
 to_env \
