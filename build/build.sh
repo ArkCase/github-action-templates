@@ -336,10 +336,13 @@ to_env BUILDS="$(echo -n "${BUILDS[@]}" | tr ' ' ',')"
 # We do it like this to avoid having to modify the "docker push"
 # section, below.
 to_env AUTHORITATIVE_TAG="${PRIVATE_REGISTRY}/${IMAGE_URI}:${EXACT_REVISION}"
+
 RC=0
 (
-	echo "Cleaning out the Docker system..."
-	docker system prune --all --force || true
+	if [ "${KEEP_DOCKER_CACHE:-}" != "true" ] ; then
+		echo "Cleaning out the Docker system..."
+		docker system prune --all --force || true
+	fi
 
 	echo "Launching the Docker build..."
 	set -x

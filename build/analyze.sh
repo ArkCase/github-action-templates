@@ -2,6 +2,28 @@
 . "${GITHUB_ACTION_PATH}/common.sh"
 
 #
+# Define the context-appropriate default value for KEEP_DOCKER_CACHE
+#
+# If we're in local development and it's not expressly set, we assume
+# that we want to keep the Docker cache.  Otherwise, for non-local
+# development, we assume that we DON'T want to keep the Docker cache.
+#
+# If the value is expressly set to either "true" or "false", we keep it
+# as provided and carry on with the build.
+is_local_dev && DEFAULT_KEEP_DOCKER_CACHE="true" || DEFAULT_KEEP_DOCKER_CACHE="false"
+
+#
+# Sanitize the value for KEEP_DOCKER_CACHE
+#
+[ -v KEEP_DOCKER_CACHE ] || KEEP_DOCKER_CACHE=""
+KEEP_DOCKER_CACHE="${KEEP_DOCKER_CACHE,,}"
+case "${KEEP_DOCKER_CACHE}" in
+	true | false ) ;;
+	* ) KEEP_DOCKER_CACHE="${DEFAULT_KEEP_DOCKER_CACHE}" ;;
+esac
+to_env KEEP_DOCKER_CACHE
+
+#
 # This is useful for validating revision numbers
 #
 export RE_FULL_REVISION="^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA-Z0-9-]+)*))?([+]([a-zA-Z0-9-]+))?$"
