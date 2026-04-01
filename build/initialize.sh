@@ -40,7 +40,7 @@ cleanup()
 {
 	rm -rf "${ARGS_TEMP}" &>/dev/null
 }
-trap exit CLEANUP
+trap cleanup EXIT
 
 ARGS_DIR="${GITHUB_ACTION_PATH}/.build-args"
 for CANDIDATE in "${CANDIDATES[@]}" ; do
