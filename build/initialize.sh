@@ -1,11 +1,6 @@
 #!/bin/bash
 . "${GITHUB_ACTION_PATH}/common.sh"
 
-#
-# Clear out the environment file!
-#
-: > "${ENV_FILE}"
-
 to_env TIMESTAMP="$(date -u +%Y%m%d%H%M%S)"
 
 # If we're not given an explicit revision, and the

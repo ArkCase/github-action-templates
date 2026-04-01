@@ -10,7 +10,11 @@ export RE_FULL_REVISION="^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA
 # Check to see the project's visibility
 #
 # TODO: CHECK THE DOCKERFILE FOR A REQUEST (ARG) TO KEEP THE BUILD PRIVATE?
-export PRIVATE="$(gh repo view --json isPrivate --jq .isPrivate)"
+PRIVATE="$(gh repo view --json isPrivate --jq .isPrivate)" || PRIVATE="true"
+case "${PRIVATE,,}" in
+	false | true ) PRIVATE="${PRIVATE,,}" ;;
+	* ) PRIVATE="false" ;;
+esac
 export VISIBILITY="private"
 export FIPS=""
 
@@ -65,8 +69,8 @@ to_env LOCAL_DEV PRIVATE_REGISTRY PUBLIC_REGISTRY
 #
 REVISION="${PARAM_REVISION}"
 PORTAL_VER="${PARAM_PORTAL}"
-PUBLISH_MAJOR="${PARAM_PUBLISH_MAJOR}"
-PUBLISH_MINOR="${PARAM_PUBLISH_MINOR}"
+PUBLISH_MAJOR=""
+PUBLISH_MINOR=""
 
 #
 # If we weren't given a REVISION or a PORTAL_VER we want to "parse"
@@ -75,6 +79,7 @@ PUBLISH_MINOR="${PARAM_PUBLISH_MINOR}"
 #
 if [ -z "${REVISION}" ] || [ -z "${PORTAL_VER}" ] ; then
 	# Parse out the tag, handle the case when it's not there
+	RC=0
 	DOCKERFILE_ARG_DECLARATIONS="$(
 		set -euo pipefail
 
@@ -114,7 +119,7 @@ if [ -z "${REVISION}" ] || [ -z "${PORTAL_VER}" ] ; then
 			# This checks for each variable and outputs its
 			# value if present, or an empty string if absent
 			V="${BUILD_ARG_PREFIX}${R}"
-			[ -v "${V}" ] && echo "${R}=${!V}"
+			[ -v "${V}" ] && echo "${R}=${!V}" || echo "${R}="
 		done
 		exit 0
 	)" || RC=${?}
@@ -127,7 +132,7 @@ if [ -z "${REVISION}" ] || [ -z "${PORTAL_VER}" ] ; then
 	# Declare the variables for consumption
 	while read DECLARATION ; do
 		[ -n "${DECLARATION}" ] && declare -xg "DOCKERFILE_${DECLARATION}"
-	done < <(echo -n "${DOCKERFILE_ARG_DECLARATIONS}")
+	done <<< "${DOCKERFILE_ARG_DECLARATIONS}"
 
 	# We only override the revision if it wasn't provided as a parameter
 	if [ -z "${REVISION}" ] ; then

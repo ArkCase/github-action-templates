@@ -181,8 +181,7 @@ runs:
         REGISTRY: "quay.io"
         USERNAME: ${{ inputs.alf-quay-io-username }}
         PASSWORD: ${{ inputs.alf-quay-io-password }}
-        LOCAL_REGISTRY: ${{ inputs.local-registry }}
-      if: ${{ (env.LOCAL_REGISTRY == '') && (env.USERNAME != '') && (env.PASSWORD != '') }}
+      if: ${{ (env.USERNAME != '') && (env.PASSWORD != '') }}
       uses: docker/login-action@v4
       with:
         registry: ${{ env.REGISTRY }}
@@ -194,8 +193,7 @@ runs:
         REGISTRY: "cgr.dev"
         USERNAME: ${{ inputs.chainguard-username }}
         PASSWORD: ${{ inputs.chainguard-password }}
-        LOCAL_REGISTRY: ${{ inputs.local-registry }}
-      if: ${{ (env.LOCAL_REGISTRY == '') && (env.USERNAME != '') && (env.PASSWORD != '') }}
+      if: ${{ (env.USERNAME != '') && (env.PASSWORD != '') }}
       uses: docker/login-action@v4
       with:
         registry: ${{ env.REGISTRY }}
@@ -203,9 +201,6 @@ runs:
         password: ${{ env.PASSWORD }}
 
     - name: Configure AWS credentials
-      env:
-        LOCAL_REGISTRY: ${{ inputs.local-registry }}
-      if: ${{ env.LOCAL_REGISTRY == '' }}
       uses: aws-actions/configure-aws-credentials@v6
       with:
         aws-region: ${{ inputs.aws-region }}
@@ -217,18 +212,12 @@ runs:
       # ECR_REGISTRY_PRIVATE value is computed here
     - id: login-ecr-private
       name: Login to Amazon ECR (Private)
-      env:
-        LOCAL_REGISTRY: ${{ inputs.local-registry }}
-      if: ${{ env.LOCAL_REGISTRY == '' }}
       uses: aws-actions/amazon-ecr-login@v2
 
       # The AWS login needs to happen before the build b/c the
       # ECR_REGISTRY_PUBLIC value is computed here
     - id: login-ecr-public
       name: Login to Amazon ECR (Public)
-      env:
-        LOCAL_REGISTRY: ${{ inputs.local-registry }}
-      if: ${{ env.LOCAL_REGISTRY == '' }}
       uses: aws-actions/amazon-ecr-login@v2
       with:
         registry-type: public
@@ -422,7 +411,3 @@ runs:
       if: ${{ (env.LOCAL_REGISTRY == '') || (env.LOCAL_PUBLISH == 'true') }}
       run: |
         "${GITHUB_ACTION_PATH}/publish.sh"
-
-    - name: Cleanup
-      run: |
-        "${GITHUB_ACTION_PATH}/cleanup.sh"

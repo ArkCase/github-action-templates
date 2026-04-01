@@ -170,6 +170,7 @@ jobs:
         uses: arkcase/github-action-templates/build@main
         with:
           # General build parameters
+          local-registry: ${{ env.LOCAL_REGISTRY }}
           matrix-revision: ${{ matrix.revision }}
           matrix-variant: ${{ matrix.variant }}
           revision: ${{ inputs.revision }}
