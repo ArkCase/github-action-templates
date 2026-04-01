@@ -404,6 +404,8 @@ to_env SCAN_COMP SCAN_VULN
 to_env ARTIFACT_IDENTIFIER
 
 to_env SCAN_DIR="${WORK_DIR}/security-scan"
+[ -d "${SCAN_DIR}" ] && rm -rf "${SCAN_DIR}"
+mkdir -p "${SCAN_DIR}"
 
 # TODO: account for the branch name!
 to_env COMP_REPORT_BASE="compliance${ARTIFACT_IDENTIFIER}"

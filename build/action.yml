@@ -1,17 +1,5 @@
 name: Build Armedia Docker Containers
 inputs:
-  local-registry:
-    description: "The Docker registry to use for local development"
-    required: false
-    type: string
-    default: ""
-
-  local-publish:
-    description: "Whether to publish the container to the local registry"
-    required: false
-    type: boolean
-    default: false
-
   matrix-revision:
     description: "The matrix revision being built"
     required: false
@@ -181,7 +169,7 @@ runs:
         REGISTRY: "quay.io"
         USERNAME: ${{ inputs.alf-quay-io-username }}
         PASSWORD: ${{ inputs.alf-quay-io-password }}
-      if: ${{ (env.USERNAME != '') && (env.PASSWORD != '') }}
+      if: ${{ (env.REGISTRY != '') && (env.USERNAME != '') && (env.PASSWORD != '') }}
       uses: docker/login-action@v4
       with:
         registry: ${{ env.REGISTRY }}
@@ -193,7 +181,19 @@ runs:
         REGISTRY: "cgr.dev"
         USERNAME: ${{ inputs.chainguard-username }}
         PASSWORD: ${{ inputs.chainguard-password }}
-      if: ${{ (env.USERNAME != '') && (env.PASSWORD != '') }}
+      if: ${{ (env.REGISTRY != '') && (env.USERNAME != '') && (env.PASSWORD != '') }}
+      uses: docker/login-action@v4
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ env.USERNAME }}
+        password: ${{ env.PASSWORD }}
+
+    - name: Docker Login to the Local Registry
+      env:
+        REGISTRY: ${{ env.LOCAL_REGISTRY }}
+        USERNAME: ${{ env.LOCAL_REGISTRY_USERNAME }}
+        PASSWORD: ${{ env.LOCAL_REGISTRY_PASSWORD }}
+      if: ${{ (env.REGISTRY != '') && (env.USERNAME != '') && (env.PASSWORD != '') }}
       uses: docker/login-action@v4
       with:
         registry: ${{ env.REGISTRY }}
@@ -201,6 +201,7 @@ runs:
         password: ${{ env.PASSWORD }}
 
     - name: Configure AWS credentials
+      if: ${{ env.LOCAL_REGISTRY == '' }}
       uses: aws-actions/configure-aws-credentials@v6
       with:
         aws-region: ${{ inputs.aws-region }}
@@ -212,12 +213,14 @@ runs:
       # ECR_REGISTRY_PRIVATE value is computed here
     - id: login-ecr-private
       name: Login to Amazon ECR (Private)
+      if: ${{ env.LOCAL_REGISTRY == '' }}
       uses: aws-actions/amazon-ecr-login@v2
 
       # The AWS login needs to happen before the build b/c the
       # ECR_REGISTRY_PUBLIC value is computed here
     - id: login-ecr-public
       name: Login to Amazon ECR (Public)
+      if: ${{ env.LOCAL_REGISTRY == '' }}
       uses: aws-actions/amazon-ecr-login@v2
       with:
         registry-type: public
@@ -226,35 +229,30 @@ runs:
       env:
         ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr-private.outputs.registry }}
         ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
-        LOCAL_REGISTRY: ${{ inputs.local-registry }}
       run: |
         "${GITHUB_ACTION_PATH}/analyze.sh"
 
     - name: Show Current Build Space
       env:
-        LOCAL_REGISTRY: ${{ inputs.local-registry }}
         MAXIMIZE_BUILD_SPACE: ${{ inputs.maximize-build-space }}
-      if: ${{ (env.LOCAL_REGISTRY == '') && (env.MAXIMIZE_BUILD_SPACE == 'true') }}
+      if: ${{ env.MAXIMIZE_BUILD_SPACE == 'true' }}
       run: df -kh
 
     - name: Clear Out All Possible Disk Space
       env:
-        LOCAL_REGISTRY: ${{ inputs.local-registry }}
         MAXIMIZE_BUILD_SPACE: ${{ inputs.maximize-build-space }}
-      if: ${{ (env.LOCAL_REGISTRY == '') && (env.MAXIMIZE_BUILD_SPACE == 'true') }}
+      if: ${{ env.MAXIMIZE_BUILD_SPACE == 'true' }}
       uses: jlumbroso/free-disk-space@main
 
     - name: Show Maximized Build Space
       env:
-        LOCAL_REGISTRY: ${{ inputs.local-registry }}
         MAXIMIZE_BUILD_SPACE: ${{ inputs.maximize-build-space }}
-      if: ${{ (env.LOCAL_REGISTRY == '') && (env.MAXIMIZE_BUILD_SPACE == 'true') }}
+      if: ${{ env.MAXIMIZE_BUILD_SPACE == 'true' }}
       run: df -kh
 
     - name: Build the Docker image
       env:
         MATRIX_REVISION: ${{ inputs.matrix-revision }}
-        LOCAL_REGISTRY: ${{ inputs.local-registry }}
         ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr-private.outputs.registry }}
         ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
         ECR_AWS_REGION: ${{ inputs.aws-region }}
@@ -266,34 +264,25 @@ runs:
         MVN_GET_ENCRYPTION_KEY: ${{ inputs.mvn-get-encryption-key }}
         MVN_GET_USERNAME: ${{ inputs.mvn-get-username }}
         MVN_GET_PASSWORD: ${{ inputs.mvn-get-password }}
+        SCAN_COMP: ${{ inputs.compliance-scan }}
+        SCAN_VULN: ${{ inputs.vulnerabilities-scan }}
       run: |
        "${GITHUB_ACTION_PATH}/build.sh"
 
-    - name: Clear out the results directory
-      env:
-        SCAN_COMP: ${{ inputs.compliance-scan }}
-        SCAN_VULN: ${{ inputs.vulnerabilities-scan }}
-      if: ${{ (env.SCAN_COMP == 'true') || (env.SCAN_VULN == 'true') }}
-      run: |
-        [ -d "${SCAN_DIR}" ] && rm -rf "${SCAN_DIR}"
-        mkdir -p "${SCAN_DIR}"
-
     - name: Scan for STIG compliance
-      if: ${{ env.SCAN_COMP == 'true' }}
       env:
-        SCAN_COMP: ${{ inputs.compliance-scan }}
-        SCAN_COMP_REQUIRED: ${{ inputs.compliance-required }}
         SCAN_TYPE: "compliance"
+        SCAN_COMP_REQUIRED: ${{ inputs.compliance-required }}
         SCANNER_IMAGE: ${{ inputs.scanner-image }}
+      if: ${{ env.SCAN_COMP == 'true' }}
       run: |
         "${GITHUB_ACTION_PATH}/run-scan.sh"
       continue-on-error: ${{ env.SCAN_COMP_REQUIRED != 'true' }}
 
     - name: Scan for vulnerabilities
       env:
-        SCAN_VULN: ${{ inputs.vulnerabilities-scan }}
-        SCAN_VULN_REQUIRED: ${{ inputs.vulnerabilities-required }}
         SCAN_TYPE: "vulnerabilities"
+        SCAN_VULN_REQUIRED: ${{ inputs.vulnerabilities-required }}
         SCANNER_IMAGE: ${{ inputs.scanner-image }}
       if: ${{ env.SCAN_VULN == 'true' }}
       run: |
@@ -301,8 +290,6 @@ runs:
       continue-on-error: ${{ env.SCAN_VULN_REQUIRED != 'true' }}
 
     - name: Upload the STIG compliance report to the GitHub Artifacts tab
-      env:
-        LOCAL_REGISTRY: ${{ inputs.local-registry }}
       if: ${{ (env.LOCAL_REGISTRY == '') && (hashFiles(env.COMP_REPORT_XML_SOURCE) != '') }}
       uses: actions/upload-artifact@v6
       with:
@@ -311,8 +298,6 @@ runs:
         retention-days: ${{ env.SCAN_REPORT_RETENTION_DAYS }}
 
     - name: Upload the STIG compliance report to the GitHub Security tab
-      env:
-        LOCAL_REGISTRY: ${{ inputs.local-registry }}
       if: ${{ (env.LOCAL_REGISTRY == '') && (hashFiles(env.COMP_REPORT_XML_SOURCE) != '') }}
       uses: github/codeql-action/upload-sarif@v4
       with:
@@ -322,17 +307,14 @@ runs:
 
     - name: Upload the STIG compliance report to S3
       env:
-        REPORTS_BUCKET: ${{ inputs.reports-bucket }}
         TYPE: "compliance"
+        REPORTS_BUCKET: ${{ inputs.reports-bucket }}
         PATTERN: ${{ env.COMP_REPORT_PATTERN }}
-        LOCAL_REGISTRY: ${{ inputs.local-registry }}
       if: ${{ (env.LOCAL_REGISTRY == '') && (hashFiles(env.COMP_REPORT_XML_SOURCE) != '') }}
       run: |
         "${GITHUB_ACTION_PATH}/upload-reports.sh" 
 
     - name: Upload the vulnerabilities reports to the GitHub artifacts tab
-      env:
-        LOCAL_REGISTRY: ${{ inputs.local-registry }}
       if: ${{ (env.LOCAL_REGISTRY == '') && (hashFiles(env.VULN_REPORT_JSON_SOURCE) != '') }}
       uses: actions/upload-artifact@v6
       with:
@@ -341,8 +323,6 @@ runs:
         retention-days: ${{ env.SCAN_REPORT_RETENTION_DAYS }}
 
     - name: Upload the vulnerabilities report to the GitHub Security tab
-      env:
-        LOCAL_REGISTRY: ${{ inputs.local-registry }}
       if: ${{ (env.LOCAL_REGISTRY == '') && (hashFiles(env.VULN_REPORT_SARIF_SOURCE) != '') }}
       uses: github/codeql-action/upload-sarif@v4
       with:
@@ -352,10 +332,9 @@ runs:
 
     - name: Upload the vulnerabilities report to S3
       env:
-        REPORTS_BUCKET: ${{ inputs.reports-bucket }}
         TYPE: "vulnerabilities"
+        REPORTS_BUCKET: ${{ inputs.reports-bucket }}
         PATTERN: ${{ env.VULN_REPORT_PATTERN }}
-        LOCAL_REGISTRY: ${{ inputs.local-registry }}
       if: ${{ (env.LOCAL_REGISTRY == '') && (hashFiles(env.VULN_REPORT_JSON_SOURCE) != '') }}
       run: |
         "${GITHUB_ACTION_PATH}/upload-reports.sh" 
@@ -366,19 +345,14 @@ runs:
         "${GITHUB_ACTION_PATH}/rebuild-with-scans.sh"
 
     - name: Push the new tags
-      env:
-        LOCAL_REGISTRY: ${{ inputs.local-registry }}
       if: ${{ env.LOCAL_REGISTRY == '' }}
       run: |
-        # We split this up b/c if this build doesn't pass the security scan,
-        # it won't be uploaded or tagged (eventually :D)
         "${GITHUB_ACTION_PATH}/push-tags.sh"
 
     - name: Create the ECR Repositories (if applicable)
       env:
         IMAGE_URI: ${{ inputs.image-uri }}
         AWS_REGION: ${{ inputs.aws-region }}
-        LOCAL_REGISTRY: ${{ inputs.local-registry }}
       if: ${{ env.LOCAL_REGISTRY == '' }}
       run: |
         "${GITHUB_ACTION_PATH}/create-repository.sh"
@@ -388,7 +362,6 @@ runs:
         IMAGE_URI: ${{ inputs.image-uri }}
         AWS_ORG_ID: ${{ inputs.aws-org-id }}
         AWS_REGION: ${{ inputs.aws-region }}
-        LOCAL_REGISTRY: ${{ inputs.local-registry }}
       if: ${{ env.LOCAL_REGISTRY == '' }}
       run: |
         "${GITHUB_ACTION_PATH}/permissions.sh"
@@ -399,15 +372,11 @@ runs:
         AWS_REGION: ${{ inputs.aws-region }}
         SNAPSHOT_KEEP_DAYS: ${{ inputs.snapshot-keep-days }}
         DEVEL_KEEP_DAYS: ${{ inputs.devel-keep-days }}
-        LOCAL_REGISTRY: ${{ inputs.local-registry }}
       if: ${{ env.LOCAL_REGISTRY == '' }}
       run: |
         "${GITHUB_ACTION_PATH}/lifecycle-policy.sh"
 
     - name: Publish the Docker Image (and all its tags)
-      env:
-        LOCAL_REGISTRY: ${{ inputs.local-registry }}
-        LOCAL_PUBLISH: ${{ inputs.local-publish }}
       if: ${{ (env.LOCAL_REGISTRY == '') || (env.LOCAL_PUBLISH == 'true') }}
       run: |
         "${GITHUB_ACTION_PATH}/publish.sh"
