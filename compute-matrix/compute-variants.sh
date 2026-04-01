@@ -9,7 +9,7 @@ CANDIDATE_VARIANTS=( "main" )
 # See if this container build cares whether there's FIPS
 # anywhere or not ...
 #
-grep -qE "^ARG\s+FIPS(=.*)?\s*$" "${WORK_DIR}/Dockerfile" && CANDIDATE_VARIANTS+=( "fips" )
+grep -qE "^ARG\s+FIPS(=.*)?\s*$" "${GITHUB_WORKSPACE}/Dockerfile" && CANDIDATE_VARIANTS+=( "fips" )
 
 # TODO: Compute other variants?
 

@@ -27,9 +27,9 @@ fi
 OUT=""
 METHOD=""
 FILE_NAME=".alt-revisions"
-FILE="${WORK_DIR}/${FILE_NAME}"
+FILE="${GITHUB_WORKSPACE}/${FILE_NAME}"
 SCRIPT_NAME="${FILE_NAME}.dynamic"
-SCRIPT="${WORK_DIR}/${SCRIPT_NAME}"
+SCRIPT="${GITHUB_WORKSPACE}/${SCRIPT_NAME}"
 if [ -f "${SCRIPT}" ] ; then
 	# If there's a script called ".alt-revisions.dynamic" in the
 	# root checkout directory, then we run that and its STDOUT
