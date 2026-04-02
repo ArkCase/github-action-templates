@@ -143,13 +143,11 @@ inputs:
     description: "The number of days to keep devel- builds for"
     required: false
     type: number
-    default: 30
 
   snapshot-keep-days:
     description: "The number of days to keep SNAPSHOT builds for"
     required: false
     type: number
-    default: 30
 
 runs:
   using: composite
