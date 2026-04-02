@@ -79,6 +79,10 @@ on:
       ECR_AWS_SECRET_ACCESS_KEY:
         required: true
 
+      # Vestigial, needs to be removed
+      ECR_AWS_ACCOUNT_ID:
+        required: false
+
       #
       # For Alfresco base container image access
       #
