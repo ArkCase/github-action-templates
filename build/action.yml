@@ -365,7 +365,6 @@ runs:
 
     - name: Create the ECR Repositories (if applicable)
       env:
-        IMAGE_URI: ${{ inputs.image-uri }}
         AWS_REGION: ${{ inputs.aws-region }}
       if: ${{ env.LOCAL_DEV != 'true' }}
       shell: bash
@@ -374,7 +373,6 @@ runs:
 
     - name: Create Access Permissions
       env:
-        IMAGE_URI: ${{ inputs.image-uri }}
         AWS_ORG_ID: ${{ inputs.aws-org-id }}
         AWS_REGION: ${{ inputs.aws-region }}
       if: ${{ env.LOCAL_DEV != 'true' }}
@@ -384,7 +382,6 @@ runs:
 
     - name: Create Lifecycle Policy
       env:
-        IMAGE_URI: ${{ inputs.image-uri }}
         AWS_REGION: ${{ inputs.aws-region }}
         SNAPSHOT_KEEP_DAYS: ${{ inputs.snapshot-keep-days }}
         DEVEL_KEEP_DAYS: ${{ inputs.devel-keep-days }}
