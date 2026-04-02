@@ -95,11 +95,18 @@ quit()
 	exit 0
 }
 
+is_envvar()
+{
+	local VAR="${1:-}"
+	[[ "${VAR}" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)$ ]] || return 1
+	return 0
+}
+
 has_value()
 {
 	local DECL="${1}"
-	[[ "${DECL}" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$ ]] && return 0
-	return 1
+	[[ "${DECL}" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$ ]] || return 1
+	return 0
 }
 
 to_env()
