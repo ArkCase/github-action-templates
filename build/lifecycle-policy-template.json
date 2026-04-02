@@ -43,7 +43,7 @@
 		},
 		{
 			"rulePriority": 400,
-			"description": $DEVEL_KEEP_STR
+			"description": $DEVEL_KEEP_STR,
 			"selection": {
 				"tagStatus": "tagged",
 				"tagPatternList": [ "devel-*" ],
