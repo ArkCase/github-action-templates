@@ -404,7 +404,7 @@ to_env SCAN_COMP SCAN_VULN
 # Save the final value
 to_env ARTIFACT_IDENTIFIER
 
-to_env SCAN_DIR="${WORK_DIR}/security-scan"
+to_env SCAN_DIR="${GITHUB_ACTION_PATH}/security-scan"
 [ -d "${SCAN_DIR}" ] && rm -rf "${SCAN_DIR}"
 mkdir -p "${SCAN_DIR}"
 
