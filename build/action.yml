@@ -277,24 +277,22 @@ runs:
 
     - name: Scan for STIG compliance
       env:
-        SCAN_TYPE: "compliance"
         SCAN_COMP_REQUIRED: ${{ inputs.compliance-required }}
         SCANNER_IMAGE: ${{ inputs.scanner-image }}
       if: ${{ env.SCAN_COMP == 'true' }}
       shell: bash
       run: |
-        "${GITHUB_ACTION_PATH}/run-scan.sh"
+        "${GITHUB_ACTION_PATH}/run-scan.sh" "compliance"
       continue-on-error: ${{ env.SCAN_COMP_REQUIRED != 'true' }}
 
     - name: Scan for vulnerabilities
       env:
-        SCAN_TYPE: "vulnerabilities"
         SCAN_VULN_REQUIRED: ${{ inputs.vulnerabilities-required }}
         SCANNER_IMAGE: ${{ inputs.scanner-image }}
       if: ${{ env.SCAN_VULN == 'true' }}
       shell: bash
       run: |
-        "${GITHUB_ACTION_PATH}/run-scan.sh"
+        "${GITHUB_ACTION_PATH}/run-scan.sh" "vulnerabilities"
       continue-on-error: ${{ env.SCAN_VULN_REQUIRED != 'true' }}
 
     - name: Upload the STIG compliance report to the GitHub Artifacts tab

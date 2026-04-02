@@ -1,6 +1,18 @@
 #!/bin/bash
 . "${GITHUB_ACTION_PATH}/common.sh"
 
+SCAN_TYPE="${1:-}"
+
+[ -n "${SCAN_TYPE}" ] || fail "Must provide a scan type"
+
+SCAN_OVERRIDE="OVERRIDE_${SCAN_TYPE^^}_SCAN"
+if is_envvar "${SCAN_OVERRIDE}" && [ -v "${SCAN_OVERRIDE}" ] ; then
+	VAL="${!SCAN_OVERRIDE}"
+	case "${VAL,,}" in
+		true ) quit "The ${SCAN_OVERRIDE} variable is set to 'true' - skipping the ${SCAN_TYPE^^} scan!"
+	esac
+fi
+
 echo "Launching the ${SCAN_TYPE^^} Scan for ${AUTHORITATIVE_TAG}..."
 DOCKER_SOCKET="/var/run/docker.sock"
 
