@@ -15,7 +15,7 @@
 		},
 		{
 			"rulePriority": 200,
-			"description": "Keep only the top-level SNAPSHOTS built in the past ${SNAPSHOT_KEEP_DAYS} days",
+			"description": $SNAPSHOT_KEEP_STR,
 			"selection": {
 				"tagStatus": "tagged",
 				"tagPatternList": [ "*-SNAPSHOT" ],
@@ -43,7 +43,7 @@
 		},
 		{
 			"rulePriority": 400,
-			"description": "Keep only fresh-built devel-* tags that AREN'T the top-level SNAPSHOTs, pushed in the last ${DEVEL_KEEP_DAYS} days",
+			"description": $DEVEL_KEEP_STR
 			"selection": {
 				"tagStatus": "tagged",
 				"tagPatternList": [ "devel-*" ],
