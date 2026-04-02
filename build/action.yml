@@ -357,12 +357,6 @@ runs:
       run: |
         "${GITHUB_ACTION_PATH}/rebuild-with-scans.sh"
 
-    - name: Push the new tags
-      if: ${{ env.LOCAL_DEV != 'true' }}
-      shell: bash
-      run: |
-        "${GITHUB_ACTION_PATH}/push-tags.sh"
-
     - name: Create the ECR Repositories (if applicable)
       env:
         AWS_REGION: ${{ inputs.aws-region }}
@@ -394,4 +388,10 @@ runs:
       if: ${{ (env.LOCAL_DEV != 'true') || (env.LOCAL_PUBLISH == 'true') }}
       shell: bash
       run: |
-        "${GITHUB_ACTION_PATH}/publish.sh"
+        "${GITHUB_ACTION_PATH}/push-images.sh"
+
+    - name: Push the new Git tags
+      if: ${{ env.LOCAL_DEV != 'true' }}
+      shell: bash
+      run: |
+        "${GITHUB_ACTION_PATH}/push-git-tags.sh"
