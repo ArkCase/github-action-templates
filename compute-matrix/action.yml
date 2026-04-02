@@ -19,11 +19,13 @@ runs:
       env:
         PARAM_REVISION: ${{ inputs.revision }}
         PARAM_PORTAL: ${{ inputs.portal }}
+      shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/compute-revisions.sh"
 
     - id: variants
       name: Compute any additional variants to be built
+      shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/compute-variants.sh"
 

@@ -156,6 +156,7 @@ runs:
   steps:
     - id: detect-local
       name: Detect Local Development
+      shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/detect-local.sh"
 
@@ -166,6 +167,7 @@ runs:
         MATRIX_VARIANT: ${{ inputs.matrix-variant }}
         PARAM_REVISION: ${{ inputs.revision }}
         PARAM_PORTAL: ${{ inputs.portal }}
+      shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/initialize.sh"
 
@@ -234,6 +236,7 @@ runs:
       env:
         ECR_REGISTRY_PRIVATE: ${{ steps.login-ecr-private.outputs.registry }}
         ECR_REGISTRY_PUBLIC: ${{ steps.login-ecr-public.outputs.registry }}
+      shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/analyze.sh"
 
@@ -241,6 +244,7 @@ runs:
       env:
         MAXIMIZE_BUILD_SPACE: ${{ inputs.maximize-build-space }}
       if: ${{ env.MAXIMIZE_BUILD_SPACE == 'true' }}
+      shell: bash
       run: df -kh
 
     - name: Clear Out All Possible Disk Space
@@ -253,6 +257,7 @@ runs:
       env:
         MAXIMIZE_BUILD_SPACE: ${{ inputs.maximize-build-space }}
       if: ${{ env.MAXIMIZE_BUILD_SPACE == 'true' }}
+      shell: bash
       run: df -kh
 
     - name: Build the Docker image
@@ -268,6 +273,7 @@ runs:
         MVN_GET_PASSWORD: ${{ inputs.mvn-get-password }}
         SCAN_COMP: ${{ inputs.compliance-scan }}
         SCAN_VULN: ${{ inputs.vulnerabilities-scan }}
+      shell: bash
       run: |
        "${GITHUB_ACTION_PATH}/build.sh"
 
@@ -277,6 +283,7 @@ runs:
         SCAN_COMP_REQUIRED: ${{ inputs.compliance-required }}
         SCANNER_IMAGE: ${{ inputs.scanner-image }}
       if: ${{ env.SCAN_COMP == 'true' }}
+      shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/run-scan.sh"
       continue-on-error: ${{ env.SCAN_COMP_REQUIRED != 'true' }}
@@ -287,6 +294,7 @@ runs:
         SCAN_VULN_REQUIRED: ${{ inputs.vulnerabilities-required }}
         SCANNER_IMAGE: ${{ inputs.scanner-image }}
       if: ${{ env.SCAN_VULN == 'true' }}
+      shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/run-scan.sh"
       continue-on-error: ${{ env.SCAN_VULN_REQUIRED != 'true' }}
@@ -313,6 +321,7 @@ runs:
         REPORTS_BUCKET: ${{ inputs.reports-bucket }}
         PATTERN: ${{ env.COMP_REPORT_PATTERN }}
       if: ${{ (env.LOCAL_DEV != 'true') && (hashFiles(env.COMP_REPORT_XML_SOURCE) != '') }}
+      shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/upload-reports.sh" 
 
@@ -338,16 +347,19 @@ runs:
         REPORTS_BUCKET: ${{ inputs.reports-bucket }}
         PATTERN: ${{ env.VULN_REPORT_PATTERN }}
       if: ${{ (env.LOCAL_DEV != 'true') && (hashFiles(env.VULN_REPORT_JSON_SOURCE) != '') }}
+      shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/upload-reports.sh" 
 
     - name: Rebuild adding the scan results
       if: ${{ (hashFiles(env.VULN_REPORT_JSON_SOURCE) != '') || (hashFiles(env.COMP_REPORT_XML_SOURCE) != '') }}
+      shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/rebuild-with-scans.sh"
 
     - name: Push the new tags
       if: ${{ env.LOCAL_DEV != 'true' }}
+      shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/push-tags.sh"
 
@@ -356,6 +368,7 @@ runs:
         IMAGE_URI: ${{ inputs.image-uri }}
         AWS_REGION: ${{ inputs.aws-region }}
       if: ${{ env.LOCAL_DEV != 'true' }}
+      shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/create-repository.sh"
 
@@ -365,6 +378,7 @@ runs:
         AWS_ORG_ID: ${{ inputs.aws-org-id }}
         AWS_REGION: ${{ inputs.aws-region }}
       if: ${{ env.LOCAL_DEV != 'true' }}
+      shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/permissions.sh"
 
@@ -375,10 +389,12 @@ runs:
         SNAPSHOT_KEEP_DAYS: ${{ inputs.snapshot-keep-days }}
         DEVEL_KEEP_DAYS: ${{ inputs.devel-keep-days }}
       if: ${{ env.LOCAL_DEV != 'true' }}
+      shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/lifecycle-policy.sh"
 
     - name: Publish the Docker Image (and all its tags)
       if: ${{ (env.LOCAL_DEV != 'true') || (env.LOCAL_PUBLISH == 'true') }}
+      shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/publish.sh"
