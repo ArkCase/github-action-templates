@@ -211,7 +211,7 @@ if [ -z "${REVISION_PRERELEASE}" ] ; then
 			# TODO: get the tags using standard docker registry APIs ... how?!?!
 			ALL_REVISIONS=""
 		else
-			ALL_REVISIONS="$("${GITHUB_ACTION_PATH}/get-aws-tags.sh" "${QUERY}")" || ALL_REVISIONS=""
+			ALL_REVISIONS="$("${GITHUB_ACTION_PATH}/get-ecr-tags.sh" "${ECR}" "${QUERY}")" || ALL_REVISIONS=""
 			[ -n "${ALL_REVISIONS}" ] && ALL_REVISIONS="$(
 				echo "${ALL_REVISIONS}" | \
 				grep -E "^${REVISION_PREFIX}${RE_REVISION_SELECTOR}$" | \
