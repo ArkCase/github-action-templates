@@ -206,7 +206,6 @@ runs:
         password: ${{ env.PASSWORD }}
 
     - name: Configure AWS credentials
-      if: ${{ env.LOCAL_DEV != 'true' }}
       uses: aws-actions/configure-aws-credentials@v6
       with:
         aws-region: ${{ inputs.aws-region }}
@@ -218,14 +217,12 @@ runs:
       # ECR_REGISTRY_PRIVATE value is computed here
     - id: login-ecr-private
       name: Login to Amazon ECR (Private)
-      if: ${{ env.LOCAL_DEV != 'true' }}
       uses: aws-actions/amazon-ecr-login@v2
 
       # The AWS login needs to happen before the build b/c the
       # ECR_REGISTRY_PUBLIC value is computed here
     - id: login-ecr-public
       name: Login to Amazon ECR (Public)
-      if: ${{ env.LOCAL_DEV != 'true' }}
       uses: aws-actions/amazon-ecr-login@v2
       with:
         registry-type: public
