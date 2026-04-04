@@ -23,7 +23,7 @@ echo "Creating the public repository for ${IMAGE_URI} (as ${IMAGE_REAL_URI})..."
 CMD=(
 	aws ecr-public create-repository
 		--repository-name "${IMAGE_REAL_URI}"
-		--region "${ECR_AWS_REGION}"
+		--region "${AWS_REGION}"
 )
 
 is_local_dev && CMD=( running "${CMD[@]}" )
