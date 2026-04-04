@@ -14,6 +14,7 @@ if is_envvar "${SCAN_OVERRIDE}" && [ -v "${SCAN_OVERRIDE}" ] ; then
 fi
 
 echo "Launching the ${SCAN_TYPE^^} Scan for ${AUTHORITATIVE_TAG}..."
+
 DOCKER_SOCKET="/var/run/docker.sock"
 
 CONTAINER_NAME_SUFFIX="${IMAGE_URI//\//-}"
@@ -33,12 +34,20 @@ fi
 CMD=(
 	docker run
 		--rm
-		--name "${SCAN_TYPE}-${CONTAINER_NAME_SUFFIX}"
+		--name "${SCAN_TYPE}-${SCAN_ID}"
 		--env RESULTS_NAME="${SCAN_TYPE}${ARTIFACT_IDENTIFIER}"
-		--volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}"
-		--volume "${SCAN_DIR}:/results"
-		"${SCANNER_IMAGE}"
-		"${SCAN_TYPE}" "${AUTHORITATIVE_TAG}"
+		# --env DEBUG_SLEEP_PRE="true"
+		# --env DEBUG_SLEEP_POST="true"
+)
+
+[ -n "${DOCKER_HOST:-}" ] \
+	&& CMD+=( --env DOCKER_HOST="${DOCKER_HOST}" ) \
+	|| CMD+=( --volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}" )
+
+CMD+=(
+	--volume "${SCAN_VOL}:/results"
+	"${SCANNER_IMAGE}"
+	"${SCAN_TYPE}" "${AUTHORITATIVE_TAG}"
 )
 
 # Run the command!
