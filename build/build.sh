@@ -409,6 +409,7 @@ sudo rm -rf "${SCAN_DIR_ROOT}"
 # environments the runners may end up sharing
 # the same directory, so we don't want them
 # clobbering each others' stuff
+SCAN_DIR="${SCAN_DIR_ROOT}"
 is_local_dev && SCAN_DIR+="/$(uuidgen)"
 
 # Set! Now commit!
