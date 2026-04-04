@@ -14,16 +14,7 @@ if is_envvar "${SCAN_OVERRIDE}" && [ -v "${SCAN_OVERRIDE}" ] ; then
 fi
 
 echo "Launching the ${SCAN_TYPE^^} Scan for ${AUTHORITATIVE_TAG}..."
-TMP_SCAN_DIR="${SCAN_DIR}/${SCAN_TYPE}"
-mkdir -p "${TMP_SCAN_DIR}"
 
-cleanup()
-{
-	rm -rf "${TMP_SCAN_DIR}" &>/dev/null
-}
-trap cleanup EXIT
-
-date -Ins -u > "${TMP_SCAN_DIR}/.started"
 DOCKER_SOCKET="/var/run/docker.sock"
 
 CONTAINER_NAME_SUFFIX="${IMAGE_URI//\//-}"
@@ -43,8 +34,10 @@ fi
 CMD=(
 	docker run
 		--rm
-		--name "${SCAN_TYPE}-${CONTAINER_NAME_SUFFIX}"
+		--name "${SCAN_TYPE}-${SCAN_ID}"
 		--env RESULTS_NAME="${SCAN_TYPE}${ARTIFACT_IDENTIFIER}"
+		# --env DEBUG_SLEEP_PRE="true"
+		# --env DEBUG_SLEEP_POST="true"
 )
 
 [ -n "${DOCKER_HOST:-}" ] \
@@ -52,7 +45,7 @@ CMD=(
 	|| CMD+=( --volume "${DOCKER_SOCKET}:${DOCKER_SOCKET}" )
 
 CMD+=(
-	--volume "${TMP_SCAN_DIR}:/results"
+	--volume "${SCAN_VOL}:/results"
 	"${SCANNER_IMAGE}"
 	"${SCAN_TYPE}" "${AUTHORITATIVE_TAG}"
 )
@@ -61,18 +54,6 @@ CMD+=(
 EXIT_CODE=0
 echo "Launching: ${CMD[@]@Q}"
 "${CMD[@]}" || EXIT_CODE=${?}
-
-#
-# Regardless of what happened, fix the permissions!
-#
-sudo chown --reference="${GITHUB_WORKSPACE}" -R "${TMP_SCAN_DIR}" || true
-sudo chmod -R u=rwX,go=rX "${TMP_SCAN_DIR}" || true
-
-#
-# Now copy the stuff over
-#
-( cd "${TMP_SCAN_DIR}" && tar -cf - . ) | tar -C "${SCAN_DIR}" -xvf - || true
-
 case "${EXIT_CODE}" in
 	0 | 2 ) exit 0 ;;
 	* ) exit ${EXIT_CODE} ;;

@@ -279,6 +279,12 @@ runs:
       run: |
        "${GITHUB_ACTION_PATH}/build.sh"
 
+    - name: Prepare for Security Scans
+      if: ${{ (env.SCAN_VULN == 'true') || (env.SCAN_COMP == 'true') }}
+      shell: bash
+      run: |
+        "${GITHUB_ACTION_PATH}/pre-scan.sh"
+
     - name: Scan for STIG compliance
       env:
         SCAN_COMP_REQUIRED: ${{ inputs.compliance-required }}
@@ -299,12 +305,11 @@ runs:
         "${GITHUB_ACTION_PATH}/run-scan.sh" "vulnerabilities"
       continue-on-error: ${{ env.SCAN_VULN_REQUIRED != 'true' }}
 
-    - name: Fix permissions for the scan directory
-      if: ${{ (env.SCAN_DIR_ROOT != '') && ((env.SCAN_VULN == 'true') || (env.SCAN_COMP == 'true')) }}
+    - name: Recover the Scan Results
+      if: ${{ (env.SCAN_VULN == 'true') || (env.SCAN_COMP == 'true') }}
       shell: bash
       run: |
-        sudo chown --reference="${GITHUB_WORKSPACE}" "${SCAN_DIR_ROOT}"
-        sudo chmod -R u=rwX,go=rX "${SCAN_DIR_ROOT}"
+        "${GITHUB_ACTION_PATH}/post-scan.sh"
 
     - name: Upload the STIG compliance report to the GitHub Artifacts tab
       if: ${{ (env.LOCAL_DEV != 'true') && (hashFiles(env.COMP_REPORT_XML_SOURCE) != '') }}
