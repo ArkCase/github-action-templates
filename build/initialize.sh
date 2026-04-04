@@ -59,7 +59,7 @@ for CANDIDATE in "${CANDIDATES[@]}" ; do
 		echo -e "${BUILD_ARGS}"
 		echo -e "--------------------------------------------------------------------------------"
 	elif [ -f "${FILE}" ] ; then
-		[ -x "${FILE}" ] || fail "The build arguments file [${FILE_NAME}] is not readable"
+		[ -r "${FILE}" ] || fail "The build arguments file [${FILE_NAME}] is not readable"
 		BUILD_ARGS="$(<"${FILE}")" || RC=${?}
 		[ ${RC} -eq 0 ] || fail "Failed to read the build arguments from [${FILE_NAME}] (rc=${RC})"
 		echo -e "The file [${FILE_NAME}] produced the following (raw) build arguments:"
