@@ -299,6 +299,13 @@ runs:
         "${GITHUB_ACTION_PATH}/run-scan.sh" "vulnerabilities"
       continue-on-error: ${{ env.SCAN_VULN_REQUIRED != 'true' }}
 
+    - name: Fix permissions for the scan directory
+      if: ${{ (env.SCAN_DIR_ROOT != '') && ((env.SCAN_VULN == 'true') || (env.SCAN_COMP == 'true')) }}
+      shell: bash
+      run: |
+        sudo chown --reference="${GITHUB_WORKSPACE}" "${SCAN_DIR_ROOT}"
+        sudo chmod -R u=rwX,go=rX "${SCAN_DIR_ROOT}"
+
     - name: Upload the STIG compliance report to the GitHub Artifacts tab
       if: ${{ (env.LOCAL_DEV != 'true') && (hashFiles(env.COMP_REPORT_XML_SOURCE) != '') }}
       uses: actions/upload-artifact@v6
@@ -320,12 +327,12 @@ runs:
         TYPE: "compliance"
         REPORTS_BUCKET: ${{ inputs.reports-bucket }}
         PATTERN: ${{ env.COMP_REPORT_PATTERN }}
-      if: ${{ (env.LOCAL_DEV != 'true') && (hashFiles(env.COMP_REPORT_XML_SOURCE) != '') }}
+      if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
       shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/upload-reports.sh" 
 
-    - name: Upload the vulnerabilities reports to the GitHub artifacts tab
+    - name: Upload the vulnerabilities reports to the GitHub Artifacts tab
       if: ${{ (env.LOCAL_DEV != 'true') && (hashFiles(env.VULN_REPORT_JSON_SOURCE) != '') }}
       uses: actions/upload-artifact@v6
       with:
@@ -346,7 +353,7 @@ runs:
         TYPE: "vulnerabilities"
         REPORTS_BUCKET: ${{ inputs.reports-bucket }}
         PATTERN: ${{ env.VULN_REPORT_PATTERN }}
-      if: ${{ (env.LOCAL_DEV != 'true') && (hashFiles(env.VULN_REPORT_JSON_SOURCE) != '') }}
+      if: ${{ hashFiles(env.VULN_REPORT_JSON_SOURCE) != '' }}
       shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/upload-reports.sh" 
@@ -360,7 +367,6 @@ runs:
     - name: Create the ECR Repositories (if applicable)
       env:
         AWS_REGION: ${{ inputs.aws-region }}
-      if: ${{ env.LOCAL_DEV != 'true' }}
       shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/create-repository.sh"
@@ -369,29 +375,25 @@ runs:
       env:
         AWS_ORG_ID: ${{ inputs.aws-org-id }}
         AWS_REGION: ${{ inputs.aws-region }}
-      if: ${{ env.LOCAL_DEV != 'true' }}
       shell: bash
       run: |
-        "${GITHUB_ACTION_PATH}/permissions.sh"
+        "${GITHUB_ACTION_PATH}/apply-permissions.sh"
 
     - name: Create Lifecycle Policy
       env:
         AWS_REGION: ${{ inputs.aws-region }}
         SNAPSHOT_KEEP_DAYS: ${{ inputs.snapshot-keep-days }}
         DEVEL_KEEP_DAYS: ${{ inputs.devel-keep-days }}
-      if: ${{ env.LOCAL_DEV != 'true' }}
       shell: bash
       run: |
-        "${GITHUB_ACTION_PATH}/lifecycle-policy.sh"
+        "${GITHUB_ACTION_PATH}/apply-lifecycle-policy.sh"
 
     - name: Publish the Docker Image (and all its tags)
-      if: ${{ (env.LOCAL_DEV != 'true') || (env.LOCAL_PUBLISH == 'true') }}
       shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/push-images.sh"
 
     - name: Push the new Git tags
-      if: ${{ env.LOCAL_DEV != 'true' }}
       shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/push-git-tags.sh"

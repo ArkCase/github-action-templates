@@ -49,9 +49,15 @@ done
 #
 # No build args needed here b/c we don't need'em
 #
+RC=0
 (
     set -x
     exec docker build --file "${DF}" --tag "${AUTHORITATIVE_TAG}" "${EXTRA_TAGS[@]}" .
-) || exit ${?}
+) || RC=${?}
+
+echo "Cleaning up the scan results..."
+sudo rm -rf "${SCAN_DIR}" &>/dev/null
+
+[ ${RC} -ne 0 ] && exit ${RC}
 
 to_env TAGS_ADDED="true"

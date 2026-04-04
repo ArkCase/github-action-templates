@@ -397,9 +397,23 @@ to_env SCAN_COMP SCAN_VULN
 # Save the final value
 to_env ARTIFACT_IDENTIFIER
 
-to_env SCAN_DIR="${GITHUB_ACTION_PATH}/security-scan"
-[ -d "${SCAN_DIR}" ] && rm -rf "${SCAN_DIR}"
+#
+# The base place where scan data will be stored
+#
+SCAN_DIR_ROOT="${GITHUB_WORKSPACE}/security-scan"
+
+# Always clean ALL OF IT out
+sudo rm -rf "${SCAN_DIR_ROOT}"
+
+# We MUST add a UUID in dev mode b/c in ACT
+# environments the runners may end up sharing
+# the same directory, so we don't want them
+# clobbering each others' stuff
+is_local_dev && SCAN_DIR+="/$(uuidgen)"
+
+# Set! Now commit!
 mkdir -p "${SCAN_DIR}"
+to_env SCAN_DIR_ROOT SCAN_DIR
 
 # TODO: account for the branch name!
 to_env COMP_REPORT_BASE="compliance${ARTIFACT_IDENTIFIER}"

@@ -1,7 +1,7 @@
 #!/bin/bash
 . "${GITHUB_ACTION_PATH}/common.sh"
 
-TEMPLATE="${GITHUB_ACTION_PATH}/permissions-template.json"
+TEMPLATE="${GITHUB_ACTION_PATH}/template-permissions.json"
 
 DEFAULT_AWS_ORG_ID="(unknown)"
 [ -n "${AWS_ORG_ID:-}" ] || AWS_ORG_ID="${DEFAULT_AWS_ORG_ID}"
@@ -28,7 +28,11 @@ if [ ${RC} -ne 0 ] ; then
 fi
 
 echo -e "Applying the generated repository permissions:\n$(<"${JSON}")"
-exec aws ecr set-repository-policy \
-	--region "${AWS_REGION}" \
-	--repository-name "${IMAGE_URI}" \
-	--policy-text "file://${JSON}"
+CMD=(
+	aws ecr set-repository-policy
+		--region "${AWS_REGION}"
+		--repository-name "${IMAGE_URI}"
+		--policy-text "file://${JSON}"
+)
+is_local_dev && MODE="running" || MODE="execute"
+"${MODE}" "${CMD[@]}"

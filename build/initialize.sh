@@ -35,7 +35,7 @@ cleanup()
 }
 trap cleanup EXIT
 
-ARGS_DIR="${GITHUB_ACTION_PATH}/.build-args"
+ARGS_DIR="${GITHUB_WORKSPACE}/.build-args"
 for CANDIDATE in "${CANDIDATES[@]}" ; do
 	[[ "${CANDIDATE}" =~ ^(.*)/(.*)$ ]] || continue
 

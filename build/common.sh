@@ -69,6 +69,29 @@ eyes()
 	say "👀 ${@}"
 }
 
+#
+# usage: run COMMAND [ARGS...]
+#
+# Run the given command outputting the full command first
+#
+run()
+{
+	[ ${#} -gt 0 ] || fail "No command given to run"
+	running "${@@Q}"
+	"${@}"
+}
+
+#
+# usage: execute COMMAND [ARGS...]
+#
+# Run the given command using an exec call, with the given arguments
+#
+execute()
+{
+	[ ${#} -gt 0 ] || fail "No command given to execute"
+	running "${@@Q}"
+	exec "${@}"
+}
 
 #
 # usage: [EXIT_CODE=X] fail [args ...]
