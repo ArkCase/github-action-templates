@@ -158,9 +158,9 @@ runs:
       run: |
         for dir in /var /var/run /run ; do
             echo "[${dir}]"
-            ls -ld "${dir}" || true
+            sudo ls -ld "${dir}" || true
             echo "Contents of [${dir}]"
-            ls -l "${dir}/" || true
+            sudo ls -l "${dir}/" || true
         done
 
     - id: detect-local
