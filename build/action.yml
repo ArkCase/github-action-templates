@@ -152,6 +152,17 @@ inputs:
 runs:
   using: composite
   steps:
+    - id: debug-info
+      name: Gather some debugging information
+      shell: bash
+      run: |
+        for dir in /var /var/run /run ; do
+            echo "[${dir}]"
+            sudo ls -ld "${dir}" || true
+            echo "Contents of [${dir}]"
+            sudo ls -l "${dir}/" || true
+        done
+
     - id: detect-local
       name: Detect Local Development
       shell: bash
