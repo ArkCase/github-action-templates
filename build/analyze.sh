@@ -77,8 +77,8 @@ to_env PRODUCT_SUITE IMAGE_NAME IMAGE_URI
 #
 # Override, if necessary/appropriate ...
 #
-[ -n "${ECR_REGISTRY_PRIVATE:-}" ] && to_env PRIVATE_REGISTRY="${ECR_REGISTRY_PRIVATE}"
-[ -n "${ECR_REGISTRY_PUBLIC:-}" ] && to_env PUBLIC_REGISTRY="${ECR_REGISTRY_PUBLIC}"
+[ -z "${PRIVATE_REGISTRY:-}" ] && [ -n "${ECR_REGISTRY_PRIVATE:-}" ] && to_env PRIVATE_REGISTRY="${ECR_REGISTRY_PRIVATE}"
+[ -z "${PUBLIC_REGISTRY:-}" ] && [ -n "${ECR_REGISTRY_PUBLIC:-}" ] && to_env PUBLIC_REGISTRY="${ECR_REGISTRY_PUBLIC}"
 
 [ -n "${PRIVATE_REGISTRY}" ] && [ -n "${PUBLIC_REGISTRY}" ] || fail "The registry values were not computed properly: PRIVATE=${PRIVATE_REGISTRY@Q} PUBLIC=${PUBLIC_REGISTRY@Q}"
 
