@@ -2,7 +2,7 @@
 . "${GITHUB_ACTION_PATH}/common.sh"
 
 PROJECT="${IMAGE_URI//\//-}"
-SCAN_ID="$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 16 | head -1)" || fail "Failed to generate the unique ID for the scanner volume"
+SCAN_ID="$( (tr -dc '[:alnum:]' < /dev/urandom | fold -w 16 | head -1 ) 2>&1)" || fail "Failed to generate the unique ID for the scanner volume (rc=${?}): ${SCAN_ID}"
 to_env SCAN_ID
 
 to_env SCAN_VOL="security-scan-${SCAN_ID}"
