@@ -1,7 +1,9 @@
 #!/bin/bash
 . "${GITHUB_ACTION_PATH}/common.sh"
 
-to_env SCAN_ID="$(uuidgen)"
+PROJECT="${IMAGE_URI//\//-}"
+SCAN_ID="$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 16 | head -1)" || fail "Failed to generate the unique ID for the scanner volume"
+to_env SCAN_ID
 
 to_env SCAN_VOL="security-scan-${SCAN_ID}"
 doing "Creating the Docker volume for the scan data"
