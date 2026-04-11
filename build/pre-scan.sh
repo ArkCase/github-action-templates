@@ -1,8 +1,7 @@
 #!/bin/bash
 . "${GITHUB_ACTION_PATH}/common.sh"
 
-PROJECT="${IMAGE_URI//\//-}"
-SCAN_ID="$( (tr -dc '[:alnum:]' < /dev/urandom | fold -w 16 | head -1 ) 2>&1)" || fail "Failed to generate the unique ID for the scanner volume (rc=${?}): ${SCAN_ID}"
+SCAN_ID="$( ( dd if=/dev/urandom bs=1 count=8 status=none | od -t x8 | head -1 | awk '{print $2 }' ) 2>&1)" || fail "Failed to generate the unique ID for the scanner volume (rc=${?}): ${SCAN_ID}"
 to_env SCAN_ID
 
 to_env SCAN_VOL="security-scan-${SCAN_ID}"
