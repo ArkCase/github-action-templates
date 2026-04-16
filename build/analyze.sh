@@ -103,8 +103,9 @@ DOCKERFILE="${GITHUB_WORKSPACE}/Dockerfile"
 #
 if [ -z "${REVISION}" ] || [ -z "${PORTAL_VER}" ] ; then
 	# Parse out the tag, handle the case when it's not there
+	VARS=( "VER" "PORTAL_VER" "PUBLISH_MAJOR" "PUBLISH_MINOR" )
 	RC=0
-	DOCKERFILE_ARG_DECLARATIONS="$( "${GITHUB_ACTION_PATH}/read-arg-declarations.sh" < "${DOCKERFILE}" 2>&1)" || RC=${?}
+	DOCKERFILE_ARG_DECLARATIONS="$( "${GITHUB_ACTION_PATH}/read-dockerfile-args.sh" "${VARS[@]}" < "${DOCKERFILE}" 2>&1)" || RC=${?}
 	if [ ${RC} -ne 0 ] ; then
 		echo "Failed to compute the Dockerfile argument declarations (rc=${RC}): ${DOCKERFILE_ARG_DECLARATIONS}"
 		exit ${RC}

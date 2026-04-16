@@ -1,5 +1,15 @@
 #!/bin/bash
+
+# So we can test it *REPEATEDLY*
+[ -v GITHUB_ACTION_PATH ] || export GITHUB_ACTION_PATH="$(dirname "$(readlink -f "${0}")")"
+
 . "${GITHUB_ACTION_PATH}/common.sh"
+
+usage()
+{
+	echo -e "usage: ${BASH_ARGV0:-${BASH_SOURCE:-${0}}} var1 [ var2 var3 ... varN ]"
+	exit 1
+}
 
 declare_missing_variables()
 {
@@ -15,6 +25,16 @@ declare_missing_variables()
 	done < <(envsubst -v "${LINE}")
 }
 
+declare_arg_variables()
+{
+	for ENV in "${@}" ; do
+		[[ "${ENV}" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$ ]] || continue
+		NAME="${BASH_REMATCH[1]}"
+		VALUE="${BASH_REMATCH[2]}"
+		echo "${VAR_PREFIX}${NAME}=\"${VALUE//\"/\\\"}\""
+	done
+}
+
 extract_declarations()
 {
 		sed -e :a -e '/\\$/N; s/\\\n//; ta' | \
@@ -25,13 +45,21 @@ extract_declarations()
 		grep "=" | while read line ; do
 			(
 				declare_missing_variables "${line}" "${VAR_PREFIX}" declare -xg
-				eval "${GITHUB_ACTION_PATH}/env-declare.sh" ${line} || fail "Variable declaration error for [${line}]"
+				eval declare_arg_variables ${line} || fail "Variable declaration error for [${line}]"
 			) || return ${?}
 		done
 }
 
-[ -v PRIVATE_REGISTRY ] || fail "No value for PRIVATE_REGISTRY is set!"
-[ -v PUBLIC_REGISTRY ] || fail "No value for PUBLIC_REGISTRY is set!"
+[ ${#} -ge 1 ] || usage
+
+BAD=()
+for VAR in "${@}" ; do
+	[[ "${VAR}" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)$ ]] || BAD+=( "${VAR}" )
+done
+[ ${#BAD[@]} -eq 0 ] || fail "Invalid variable names: [ ${BAD[@]} ]"
+
+[ -v PRIVATE_REGISTRY ] || export PRIVATE_REGISTRY="private.registry.placeholder"
+[ -v PUBLIC_REGISTRY ] || export PUBLIC_REGISTRY="public.registry.placeholder"
 
 # Parsing out the version from the "VER" argument can be tricky if it's computed from others
 # values or arguments, so let's try it with some sneaky trickery.
@@ -66,7 +94,7 @@ DECLARATIONS="$(extract_declarations 2>&1)" || fail "Failed to extract the ARG d
 	source <(echo "${DECLARATIONS}" | sed -e 's;^;export ;g')
 
 	# 2. output the variable declarations we're interested in
-	for R in "VER" "PORTAL_VER" "PUBLISH_MAJOR" "PUBLISH_MINOR" ; do
+	for R in "${@}" ; do
 		# This checks for each variable and outputs its
 		# value if present, or an empty string if absent
 		V="${VAR_PREFIX}${R}"
