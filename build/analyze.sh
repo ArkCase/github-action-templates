@@ -91,6 +91,12 @@ PUBLISH_MAJOR=""
 PUBLISH_MINOR=""
 
 #
+# TODO: this is in preparation for supporting different
+# Dockerfiles based on version/variant (and combo)
+#
+DOCKERFILE="${GITHUB_WORKSPACE}/Dockerfile"
+
+#
 # If we weren't given a REVISION or a PORTAL_VER we want to "parse"
 # the Dockerfile and get the default values for any ARG declarations
 # since these will give us the default values we should use.
@@ -98,52 +104,9 @@ PUBLISH_MINOR=""
 if [ -z "${REVISION}" ] || [ -z "${PORTAL_VER}" ] ; then
 	# Parse out the tag, handle the case when it's not there
 	RC=0
-	DOCKERFILE_ARG_DECLARATIONS="$(
-		set -euo pipefail
-
-		# Parsing out the version from the "VER" argument can be tricky if it's computed from others
-		# values or arguments, so let's try it with some sneaky trickery.
-
-		# We have to resort to evil black magic b/c we have to cover the edge case of
-		# line continuations - we have to collapse those, first... then we can find the
-		# ARG clauses, and finally convert them all into bash "export" clauses ... which
-		# we then consume (this is why redefinition is an issue, above). We use a prefix
-		# to avoid name clashes with read-only BASH variables which can cause the task
-		# to fail, and we use special SED strings to add the prefix as necessary for
-		# variable expansion among the arguments themselves
-		export BUILD_ARG_PREFIX="____DOCKER_ARG____"
-
-		# It's OK to define these here ... if they get overridden below, we're happy about it.
-		# Otherwise, we fall back to these values to avoid failing the parse.
-		declare -gx "${BUILD_ARG_PREFIX}PRIVATE_REGISTRY=${PRIVATE_REGISTRY}"
-		declare -gx "${BUILD_ARG_PREFIX}PUBLIC_REGISTRY=${PUBLIC_REGISTRY}"
-		declare -gx "${BUILD_ARG_PREFIX}BASE_REGISTRY=${PRIVATE_REGISTRY}"
-		alias ARG=export
-
-		# The below has a bug: an escaped $ would not be caught and could
-		# cause issues in the final evaluation by getting incorrect values
-		source <(
-			sed -e :a -e '/\\$/N; s/\\\n//; ta' < Dockerfile | \
-				grep -Ei '^\s*ARG\s+' | \
-				sed \
-					-e "s;^\s*[Aa][Rr][Gg]\(\s\+\);ARG\1;g" \
-					-e "s;\${;\$\{${BUILD_ARG_PREFIX};g" \
-					-e "s;\$\([^{]\);\$${BUILD_ARG_PREFIX}\1;g" | \
-				sed -e "s;^\s*ARG\s;export ${BUILD_ARG_PREFIX};g"
-		)
-
-		# Output the variable declarations we're interested in
-		for R in "VER" "PORTAL_VER" "PUBLISH_MAJOR" "PUBLISH_MINOR" ; do
-			# This checks for each variable and outputs its
-			# value if present, or an empty string if absent
-			V="${BUILD_ARG_PREFIX}${R}"
-			[ -v "${V}" ] && echo "${R}=${!V}" || echo "${R}="
-		done
-		exit 0
-	)" || RC=${?}
-
+	DOCKERFILE_ARG_DECLARATIONS="$( "${GITHUB_ACTION_PATH}/read-arg-declarations.sh" < "${DOCKERFILE}" 2>&1)" || RC=${?}
 	if [ ${RC} -ne 0 ] ; then
-		echo "Failed to compute the Dockerfile argument declarations (rc=${RC})"
+		echo "Failed to compute the Dockerfile argument declarations (rc=${RC}): ${DOCKERFILE_ARG_DECLARATIONS}"
 		exit ${RC}
 	fi
 
