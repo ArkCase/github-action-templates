@@ -11,43 +11,21 @@ usage()
 	exit 1
 }
 
-declare_missing_variables()
-{
-	local LINE="${1}"
-	local PREFIX="${2}"
-	shift 2
-	while read V ; do
-		if [ -v "${V}" ] ; then
-			[ -n "${V}" ] || V='""'
-		else
-			"${@}" ${V}="\${${PREFIX}${V}}"
-		fi
-	done < <(envsubst -v "${LINE}")
-}
-
-declare_arg_variables()
-{
-	for ENV in "${@}" ; do
-		[[ "${ENV}" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$ ]] || continue
-		NAME="${BASH_REMATCH[1]}"
-		VALUE="${BASH_REMATCH[2]}"
-		echo "${VAR_PREFIX}${NAME}=\"${VALUE//\"/\\\"}\""
-	done
-}
-
 extract_declarations()
 {
-		sed -e :a -e '/\\$/N; s/\\\n//; ta' | \
-		grep -Ei '^\s*ARG\s+' | \
-		sed \
-			-e "s;^\s*[Aa][Rr][Gg]\(\s\+\);ARG\1;g" \
-			-e "s;^\s*ARG\s;;g" | \
-		grep "=" | while read line ; do
-			(
-				declare_missing_variables "${line}" "${VAR_PREFIX}" declare -xg
-				eval declare_arg_variables ${line} || fail "Variable declaration error for [${line}]"
-			) || return ${?}
-		done
+	local RC=0
+	sed -e :a -e '/\\$/N; s/\\\n//; ta' | \
+	grep -Ei '^\s*ARG\s+' | \
+	sed \
+		-e "s;^\s*[Aa][Rr][Gg]\(\s\+\);ARG\1;g" \
+		-e "s;^\s*ARG\s;;g" | \
+	/usr/bin/xargs -n1 | while read DEC ; do
+		[[ "${DEC}" =~ ^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$ ]] || continue
+		NAME="${BASH_REMATCH[1]}"
+		VALUE="${BASH_REMATCH[2]}"
+		echo "${NAME}=\"${VALUE}\""
+	done
+	return 0
 }
 
 [ ${#} -ge 1 ] || usage
@@ -64,20 +42,11 @@ done
 # Parsing out the version from the "VER" argument can be tricky if it's computed from others
 # values or arguments, so let's try it with some sneaky trickery.
 
-# We have to resort to evil black magic b/c we have to cover the edge case of
-# line continuations - we have to collapse those, first... then we can find the
-# ARG clauses, and finally convert them all into bash "export" clauses ... which
-# we then consume (this is why redefinition is an issue, above). We use a prefix
-# to avoid name clashes with read-only BASH variables which can cause the task
-# to fail, and we use special SED strings to add the prefix as necessary for
-# variable expansion among the arguments themselves
-export VAR_PREFIX="____DOCKER_ARG____"
-
 # It's OK to define these here ... if they get overridden below, we're happy about it.
 # Otherwise, we fall back to these values to avoid failing the parse.
-declare -gx "${VAR_PREFIX}PRIVATE_REGISTRY=${PRIVATE_REGISTRY}"
-declare -gx "${VAR_PREFIX}PUBLIC_REGISTRY=${PUBLIC_REGISTRY}"
-declare -gx "${VAR_PREFIX}BASE_REGISTRY=${PRIVATE_REGISTRY}"
+declare -gx "PRIVATE_REGISTRY=${PRIVATE_REGISTRY}"
+declare -gx "PUBLIC_REGISTRY=${PUBLIC_REGISTRY}"
+declare -gx "BASE_REGISTRY=${PRIVATE_REGISTRY}"
 
 DECLARATIONS="$(extract_declarations 2>&1)" || fail "Failed to extract the ARG declarations (rc=${?}): ${DECLARATIONS}"
 
@@ -97,8 +66,7 @@ DECLARATIONS="$(extract_declarations 2>&1)" || fail "Failed to extract the ARG d
 	for R in "${@}" ; do
 		# This checks for each variable and outputs its
 		# value if present, or an empty string if absent
-		V="${VAR_PREFIX}${R}"
-		[ -v "${V}" ] && echo "${R}=${!V}" || echo "${R}="
+		[ -v "${R}" ] && echo "${R}=${!R}" || echo "${R}="
 	done
 
 	# 3. celebrate!
