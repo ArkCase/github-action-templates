@@ -60,7 +60,7 @@ DECLARATIONS="$(extract_declarations 2>&1)" || fail "Failed to extract the ARG d
 # matched to the output for troubleshooting
 (
 	# 1. apply the declarations
-	source <(echo "${DECLARATIONS}" | sed -e 's;^;export ;g')
+	source <(echo "${DECLARATIONS}" | sed -e 's;^;export ;g') || exit 1
 
 	# 2. output the variable declarations we're interested in
 	for R in "${@}" ; do
