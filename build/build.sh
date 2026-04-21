@@ -26,6 +26,15 @@ BUILD_ARGS+=(--build-arg "BASE_REGISTRY=${BASE_REGISTRY}")
 for VAR in "${!BUILD_ARG_@}" ; do
 	[[ "${VAR}" =~ ^BUILD_ARG_(.+)$ ]] || continue
 	ARG="${BASH_REMATCH[1]}"
+	case "${ARG}" in
+		FIPS | \
+		BASE_REGISTRY | \
+		PRIVATE_REGISTRY | \
+		PUBLIC_REGISTRY | \
+		BASE_VER_PFX | \
+		VER | \
+		PORTAL_VER ) fail "The build argument ${ARG} cannot be overridden by .bulid-arg/*" ;;
+	esac
 	BUILD_ARGS+=(--build-arg "${ARG}=${!VAR}")
 done
 
