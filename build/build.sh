@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 . "${GITHUB_ACTION_PATH}/common.sh"
 
 WORK_DIR="$(readlink -f "${GITHUB_WORKSPACE:-.}")"
