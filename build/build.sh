@@ -74,6 +74,14 @@ done |& sort &> "${MVN_GET_SECRETS}"
 BUILD_ARGS+=(--secret id=mvn_get_auth,src="${MVN_GET_SECRETS}")
 sha256sum "${MVN_GET_SECRETS}"
 
+# Add the Ubuntu Pro authentication deetz
+UBUNTU_PRO_SECRETS="${SECRETS_DIR}/ubuntu-pro"
+for VAR in "${!UBUNTU_PRO_@}" ; do
+	echo "export ${VAR}=${!VAR@Q}"
+done |& sort &> "${UBUNTU_PRO_SECRETS}"
+BUILD_ARGS+=(--secret id=ubuntu_pro_auth,src="${UBUNTU_PRO_SECRETS}")
+sha256sum "${UBUNTU_PRO_SECRETS}"
+
 # Final details for more complete information
 BUILD_ARGS+=(--label "GIT_REPOSITORY=${GITHUB_REPOSITORY}")
 BUILD_ARGS+=(--label "GIT_REF=${GITHUB_REF_NAME}")

@@ -121,6 +121,12 @@ on:
       MVN_GET_PASSWORD:
         required: false
 
+      #
+      # To build using Ubuntu Pro features
+      #
+      UBUNTU_PRO_TOKEN:
+        required: false
+
 env:
   GH_TOKEN: ${{ github.token }}
 
@@ -205,6 +211,9 @@ jobs:
           mvn-get-encryption-key: ${{ secrets.MVN_GET_ENCRYPTION_KEY }}
           mvn-get-username: ${{ secrets.MVN_GET_USERNAME }}
           mvn-get-password: ${{ secrets.MVN_GET_PASSWORD }}
+
+          # For general Ubuntu Pro authentication
+          ubuntu-pro-token: ${{ secrets.UBUNTU_PRO_TOKEN }}
 
           # Parameters for security scanning
           scanner-image: ${{ inputs.scanner-image }}
