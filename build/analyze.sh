@@ -67,7 +67,7 @@ export IMAGE_NAME="${PARTS[1]//_/-}"
 
 # Also, to support more product suites in the future...
 case "${PRODUCT_SUITE}" in
-	"arkcase" ) IMAGE_NAME="$(echo -n "${IMAGE_NAME}" | sed -e "s;^ark-;;g")" ;;
+	"arkcase" ) IMAGE_NAME="$(echo -n "${IMAGE_NAME}" | sed -e "s;^ark-;;g" -e "s;^cnt-;;g")" ;;
 esac
 [ -n "${FIPS}" ] && IMAGE_NAME+="${FIPS}"
 export IMAGE_URI="${PRODUCT_SUITE}/${IMAGE_NAME}"
@@ -107,7 +107,7 @@ if [ -z "${REVISION}" ] || [ -z "${PORTAL_VER}" ] ; then
 	RC=0
 	DOCKERFILE_ARG_DECLARATIONS="$( "${GITHUB_ACTION_PATH}/read-dockerfile-args.sh" "${VARS[@]}" < "${DOCKERFILE}" 2>&1)" || RC=${?}
 	if [ ${RC} -ne 0 ] ; then
-		echo "Failed to compute the Dockerfile argument declarations (rc=${RC}): ${DOCKERFILE_ARG_DECLARATIONS}"
+		say "Failed to compute the Dockerfile argument declarations (rc=${RC}): ${DOCKERFILE_ARG_DECLARATIONS}"
 		exit ${RC}
 	fi
 
@@ -132,13 +132,11 @@ if [ -z "${REVISION}" ] || [ -z "${PORTAL_VER}" ] ; then
 	[ -z "${PUBLISH_MAJOR}" ] && PUBLISH_MAJOR="${DOCKERFILE_PUBLISH_MAJOR:-false}"
 	[ -z "${PUBLISH_MINOR}" ] && PUBLISH_MINOR="${DOCKERFILE_PUBLISH_MINOR:-false}"
 
-	echo "Computed REVISION=${REVISION}"
-	echo "Computed PORTAL_VER=${PORTAL_VER}"
-	echo "Computed PUBLISH_MAJOR=${PUBLISH_MAJOR}"
-	echo "Computed PUBLISH_MINOR=${PUBLISH_MINOR}"
+	say "Computed REVISION=${REVISION}"
+	say "Computed PORTAL_VER=${PORTAL_VER}"
+	say "Computed PUBLISH_MAJOR=${PUBLISH_MAJOR}"
+	say "Computed PUBLISH_MINOR=${PUBLISH_MINOR}"
 fi
-
-set -x
 
 #
 # Make sure these two have a valid boolean value
@@ -204,7 +202,7 @@ if [ -n "${PORTAL_VER}" ] ; then
 	else
 		REVISION_QUALITY="2"
 	fi
-	echo "REVISION_QUALITY=${REVISION_QUALITY}"
+	say "REVISION_QUALITY=${REVISION_QUALITY}"
 
 	if "${PORTAL_SNAPSHOT}" ; then
 		PORTAL_QUALITY="0"
@@ -213,7 +211,7 @@ if [ -n "${PORTAL_VER}" ] ; then
 	else
 		PORTAL_QUALITY="2"
 	fi
-	echo "PORTAL_QUALITY=${PORTAL_QUALITY}"
+	say "PORTAL_QUALITY=${PORTAL_QUALITY}"
 
 	[ ${REVISION_QUALITY} -le ${PORTAL_QUALITY} ] || fail "The target revision quality (${REVISION_QUALITY}) is higher than the Portal component quality (${PORTAL_QUALITY}), and this is not allowed"
 fi
@@ -223,11 +221,11 @@ export ENVIRONMENT="devel"
 export REVISION_PREFIX="devel-"
 # This makes it easier to add special branch handlers later on
 if is_local_dev ; then
-	echo "Local development mode detected - will NOT produce stable artifacts"
+	say "Local development mode detected - will NOT produce stable artifacts"
 else
 	case "${GITHUB_REF}" in
 		"refs/heads/main" | "refs/tags/release"/* ) ENVIRONMENT="stable" ; REVISION_PREFIX="" ;;
-		* ) echo "GITHUB_REF=${GITHUB_REF@Q} - not a stable branch" ;;
+		* ) say "GITHUB_REF=${GITHUB_REF@Q} - not a stable branch" ;;
 	esac
 fi
 to_env ENVIRONMENT REVISION_PREFIX

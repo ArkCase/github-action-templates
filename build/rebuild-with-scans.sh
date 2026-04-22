@@ -11,7 +11,7 @@ cleanup()
 }
 trap cleanup EXIT
 
-echo "Attaching scan results to ${AUTHORITATIVE_TAG}..."
+say "Attaching scan results to ${AUTHORITATIVE_TAG}..."
 
 #
 # BUILDS is a CSV whose values can't have spaces, so split it!
@@ -33,7 +33,7 @@ if [ $(wc -l < "${FILE_LIST}") -gt 0 ] ; then
 	tar -C "${SCAN_TGT_DIR}" -czvf "${SECURITY_REPORTS_BUNDLE}" --files-from="${FILE_LIST}"
 
 	BACKUP_TAG="${AUTHORITATIVE_TAG}-bak"
-	echo "Reports bundle ready! Creating a backup tag (${BACKUP_TAG}) ..."
+	say "Reports bundle ready! Creating a backup tag (${BACKUP_TAG}) ..."
 	run docker tag "${AUTHORITATIVE_TAG}" "${BACKUP_TAG}" || exit ${?}
 
 	#
@@ -49,7 +49,7 @@ if [ $(wc -l < "${FILE_LIST}") -gt 0 ] ; then
 	# This time we add all the tags up front, since this will
 	# no longer be scanned and OSCAP won't puke on our build
 	#
-	echo "Computing extra tags ..."
+	say "Computing extra tags ..."
 	EXTRA_TAGS=()
 	for BUILD in "${BUILDS[@]}" ; do
 		[ "${AUTHORITATIVE_TAG}" == "${BUILD}" ] || EXTRA_TAGS+=( --tag "${BUILD}" )
@@ -68,7 +68,7 @@ else
 	# This time we add all the tags up front, since this will
 	# no longer be scanned and OSCAP won't puke on our build
 	#
-	echo "Computing extra tags ..."
+	say "Computing extra tags ..."
 	for BUILD in "${BUILDS[@]}" ; do
 		[ "${AUTHORITATIVE_TAG}" == "${BUILD}" ] || run docker tag "${AUTHORITATIVE_TAG}" "${BUILD}"
 	done

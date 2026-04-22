@@ -15,19 +15,13 @@ JSON="$(mktemp --tmpdir="${GITHUB_ACTION_PATH}" "generated-permissions-XXXXXXXX.
 
 RC=0
 "${CMD[@]}" "$(<"${TEMPLATE}")" &>"${JSON}" || RC=${?}
-if [ ${RC} -ne 0 ] ; then
-	echo "ERROR: Failed to render the permissions JSON (rc=${RC}): $(<"${JSON}")"
-	exit ${RC}
-fi
+[ ${RC} -eq 0 ] || fail "Failed to render the permissions JSON (rc=${RC}): $(<"${JSON}")"
 
-echo "Checking the generated JSON syntax..."
+say "Checking the generated JSON syntax..."
 OUT="$(jq -r < "${JSON}" 2>&1)" || RC=${?}
-if [ ${RC} -ne 0 ] ; then
-	echo "ERROR: The rendered JSON has errors (rc=${RC}): ${OUT}\n\n$(<"${JSON}")"
-	exit ${RC}
-fi
+[ ${RC} -eq 0 ] || fail "The rendered JSON has errors (rc=${RC}): ${OUT}\n\n$(<"${JSON}")"
 
-echo -e "Applying the generated repository permissions:\n$(<"${JSON}")"
+say "Applying the generated repository permissions:\n$(<"${JSON}")"
 CMD=(
 	aws ecr set-repository-policy
 		--region "${AWS_REGION}"
