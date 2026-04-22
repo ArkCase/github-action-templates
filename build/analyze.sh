@@ -67,7 +67,7 @@ export IMAGE_NAME="${PARTS[1]//_/-}"
 
 # Also, to support more product suites in the future...
 case "${PRODUCT_SUITE}" in
-	"arkcase" ) IMAGE_NAME="$(echo -n "${IMAGE_NAME}" | sed -e "s;^ark-;;g")" ;;
+	"arkcase" ) IMAGE_NAME="$(echo -n "${IMAGE_NAME}" | sed -e "s;^ark-;;g" -e "s;^cnt-;;g")" ;;
 esac
 [ -n "${FIPS}" ] && IMAGE_NAME+="${FIPS}"
 export IMAGE_URI="${PRODUCT_SUITE}/${IMAGE_NAME}"
