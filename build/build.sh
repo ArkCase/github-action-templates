@@ -228,10 +228,10 @@ if [ -z "${REVISION_PRERELEASE}" ] ; then
 			ALL_REVISIONS="$("${GITHUB_ACTION_PATH}/get-ecr-tags.sh" "${ECR}" "${QUERY}")" || ALL_REVISIONS=""
 			[ -n "${ALL_REVISIONS}" ] && ALL_REVISIONS="$(
 				echo "${ALL_REVISIONS}" | \
-				grep -E "^${REVISION_PREFIX}${RE_REVISION_SELECTOR}$" | \
-				sed -e "s;^${REVISION_PREFIX};;g" | \
+				grep -E "^${REVISION_PREFIX}${RE_REVISION_SELECTOR}" | \
+				sed  -e "s;^${REVISION_PREFIX};;g" -e "s;[-_].*$;;g" | \
 				sort --version-sort --unique --reverse
-			)"
+			)" || ALL_REVISIONS=""
 		fi
 
 		# We have a possible maximum of 3 "latest" tags to create:
