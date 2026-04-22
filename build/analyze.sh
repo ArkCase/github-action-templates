@@ -220,11 +220,11 @@ export ENVIRONMENT="devel"
 export REVISION_PREFIX="devel-"
 # This makes it easier to add special branch handlers later on
 if is_local_dev ; then
-	say "Local development mode detected - will NOT produce stable artifacts"
+	echo "Local development mode detected - will NOT produce stable artifacts"
 else
 	case "${GITHUB_REF}" in
 		"refs/heads/main" | "refs/tags/release"/* ) ENVIRONMENT="stable" ; REVISION_PREFIX="" ;;
-		* ) say "GITHUB_REF=${GITHUB_REF@Q} - not a stable branch" ;;
+		* ) echo "GITHUB_REF=${GITHUB_REF@Q} - not a stable branch" ;;
 	esac
 fi
 to_env ENVIRONMENT REVISION_PREFIX
