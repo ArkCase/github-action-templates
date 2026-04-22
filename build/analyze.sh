@@ -138,6 +138,8 @@ if [ -z "${REVISION}" ] || [ -z "${PORTAL_VER}" ] ; then
 	echo "Computed PUBLISH_MINOR=${PUBLISH_MINOR}"
 fi
 
+set -x
+
 #
 # Make sure these two have a valid boolean value
 #
@@ -159,6 +161,7 @@ to_env PUBLISH_MAJOR PUBLISH_MINOR
 # Otherwise, the rest is the same: same rules for pre-release tags and metadata tags.
 #
 [[ "${REVISION}" =~ ${RE_FULL_REVISION} ]] || fail "Revision number is not valid: [${REVISION}] ( /${RE_FULL_REVISION}/ )"
+say "Revision number [${REVISION}] is valid"
 
 REVISION_BASE_NUMBER="${BASH_REMATCH[1]}"
 REVISION_PRERELEASE="${BASH_REMATCH[5]}"
