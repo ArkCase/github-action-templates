@@ -13,7 +13,7 @@ if is_envvar "${SCAN_OVERRIDE}" && [ -v "${SCAN_OVERRIDE}" ] ; then
 	esac
 fi
 
-echo "Launching the ${SCAN_TYPE^^} Scan for ${AUTHORITATIVE_TAG}..."
+say "Launching the ${SCAN_TYPE^^} Scan for ${AUTHORITATIVE_TAG}..."
 
 DOCKER_SOCKET="/var/run/docker.sock"
 
@@ -52,7 +52,7 @@ CMD+=(
 
 # Run the command!
 EXIT_CODE=0
-echo "Launching: ${CMD[@]@Q}"
+say "Launching: ${CMD[@]@Q}"
 "${CMD[@]}" || EXIT_CODE=${?}
 case "${EXIT_CODE}" in
 	0 | 2 ) exit 0 ;;

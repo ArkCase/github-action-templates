@@ -2,7 +2,7 @@
 . "${GITHUB_ACTION_PATH}/common.sh"
 
 # All images have private repositories
-echo "Creating the private repository for ${IMAGE_URI}..."
+say "Creating the private repository for ${IMAGE_URI}..."
 CMD=(
 	aws ecr create-repository
 		--repository-name "${IMAGE_URI}"
@@ -19,7 +19,7 @@ is_local_dev && CMD=( running "${CMD[@]}" )
 IMAGE_REAL_URI="${IMAGE_URI}"
 [[ "${IMAGE_URI}" =~ ^arkcase/(.*)$ ]] && IMAGE_REAL_URI="${BASH_REMATCH[1]}"
 
-echo "Creating the public repository for ${IMAGE_URI} (as ${IMAGE_REAL_URI})..."
+say "Creating the public repository for ${IMAGE_URI} (as ${IMAGE_REAL_URI})..."
 CMD=(
 	aws ecr-public create-repository
 		--repository-name "${IMAGE_REAL_URI}"

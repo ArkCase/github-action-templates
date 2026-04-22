@@ -22,18 +22,18 @@ JSON="$(mktemp --tmpdir="${GITHUB_ACTION_PATH}" "generated-lifecycle-policy-XXXX
 RC=0
 "${CMD[@]}" "$(<"${TEMPLATE}")" &>"${JSON}" || RC=${?}
 if [ ${RC} -ne 0 ] ; then
-	echo "ERROR: Failed to render the lifecycle policy JSON (rc=${RC}): $(<"${JSON}")"
+	err "Failed to render the lifecycle policy JSON (rc=${RC}): $(<"${JSON}")"
 	exit ${RC}
 fi
 
-echo "Checking the generated JSON syntax..."
+say "Checking the generated JSON syntax..."
 OUT="$(jq -r < "${JSON}" 2>&1)" || RC=${?}
 if [ ${RC} -ne 0 ] ; then
-	echo "ERROR: The rendered JSON has errors (rc=${RC}): ${OUT}\n\n$(<"${JSON}")"
+	err "The rendered JSON has errors (rc=${RC}): ${OUT}\n\n$(<"${JSON}")"
 	exit ${RC}
 fi
 
-echo -e "Applying the generated lifecycle policy:\n$(<"${JSON}")"
+say "Applying the generated lifecycle policy:\n$(<"${JSON}")"
 CMD=(
 	aws ecr put-lifecycle-policy
 		--region "${AWS_REGION}"

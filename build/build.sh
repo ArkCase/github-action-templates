@@ -45,17 +45,21 @@ mkdir -p "${SECRETS_DIR}"
 AWS_PROFILE="armedia-docker-build"
 AWS_CONF="${SECRETS_DIR}/aws_conf"
 (
-	echo "[profile ${AWS_PROFILE}]"
-	echo "region=${ECR_AWS_REGION}"
+	cat <<-EOF
+	[profile ${AWS_PROFILE}]
+	region=${ECR_AWS_REGION}
+	EOF
 ) &> "${AWS_CONF}"
 BUILD_ARGS+=(--secret id=aws_conf,src="${AWS_CONF}")
 
 AWS_AUTH="${SECRETS_DIR}/aws_auth"
 (
-	echo "[${AWS_PROFILE}]"
-	echo "aws_access_key_id=${ECR_AWS_ACCESS_KEY}"
-	echo "aws_secret_access_key=${ECR_AWS_SECRET_ACCESS_KEY}"
-) |& sort &> "${AWS_AUTH}"
+	cat <<-EOF
+	[${AWS_PROFILE}]
+	aws_access_key_id=${ECR_AWS_ACCESS_KEY}
+	aws_secret_access_key=${ECR_AWS_SECRET_ACCESS_KEY}
+	EOF
+) &> "${AWS_AUTH}"
 BUILD_ARGS+=(--secret id=aws_auth,src="${AWS_AUTH}")
 
 # Add the Curl authentication deetz
@@ -306,7 +310,7 @@ if [ -z "${REVISION_PRERELEASE}" ] ; then
 		done
 
 		if "${IS_LATEST}" ; then
-			echo "Found latest ${LABEL} revision: ${REVISION_BASE_NUMBER}"
+			say "Found latest ${LABEL} revision: ${REVISION_BASE_NUMBER}"
 			LATEST="${REVISION_PREFIX}latest"
 			BUILDS+=("${REG}/${IMAGE_URI}:${LATEST}")
 			"${LATEST_ADDED}" || REVISIONS+=("${LATEST}")
@@ -318,7 +322,7 @@ if [ -z "${REVISION_PRERELEASE}" ] ; then
 		fi
 
 		if "${IS_LATEST_MINOR}" ; then
-			echo "Found latest ${LABEL} minor revision: ${MINOR_REVISION}"
+			say "Found latest ${LABEL} minor revision: ${MINOR_REVISION}"
 			LATEST="${REVISION_PREFIX}${MINOR_REVISION}-latest"
 			BUILDS+=("${REG}/${IMAGE_URI}:${LATEST}")
 			"${LATEST_MINOR_ADDED}" || REVISIONS+=("${LATEST}")
@@ -326,7 +330,7 @@ if [ -z "${REVISION_PRERELEASE}" ] ; then
 		fi
 
 		if "${IS_LATEST_MAJOR}" ; then
-			echo "Found latest ${LABEL} major revision: ${MAJOR_REVISION}"
+			say "Found latest ${LABEL} major revision: ${MAJOR_REVISION}"
 			LATEST="${REVISION_PREFIX}${MAJOR_REVISION}-latest"
 			BUILDS+=("${REG}/${IMAGE_URI}:${LATEST}")
 			"${LATEST_MAJOR_ADDED}" || REVISIONS+=("${LATEST}")
@@ -350,11 +354,11 @@ to_env AUTHORITATIVE_TAG="${PRIVATE_REGISTRY}/${IMAGE_URI}:${EXACT_REVISION}"
 RC=0
 (
 	if [ "${KEEP_DOCKER_CACHE:-}" != "true" ] ; then
-		echo "Cleaning out the Docker system..."
+		say "Cleaning out the Docker system..."
 		docker system prune --all --force || true
 	fi
 
-	echo "Launching the Docker build..."
+	say "Launching the Docker build..."
 	set -x
 	exec docker build "${BUILD_ARGS[@]}" --tag "${AUTHORITATIVE_TAG}" .
 ) || RC=${?}
@@ -378,7 +382,7 @@ to_env SCAN_REPORT_RETENTION_DAYS
 [ "${VARIANT}" != "main" ] && TAG_PREFIX+="/${VARIANT}"
 
 # If we want to tag the repository, do so! Clobber any existing tags!
-echo "Creating Git tags for: ${REVISIONS[@]}"
+say "Creating Git tags for: ${REVISIONS[@]}"
 if ! is_local_dev ; then
 	for R in "${REVISIONS[@]}" ; do
 		# Tags for GIT must be the *real* revision, with "+" instead of "_"

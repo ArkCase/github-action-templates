@@ -54,18 +54,18 @@ for CANDIDATE in "${CANDIDATES[@]}" ; do
 		[ -x "${SCRIPT}" ] || fail "The build arguments script [${SCRIPT_NAME}] is not executable"
 		BUILD_ARGS="$( set -o allexport ; . "${ARGS_TEMP}" ; "${SCRIPT}" )" || RC=${?}
 		[ ${RC} -eq 0 ] || fail "Failed to compute the build arguments from [${SCRIPT_NAME}] (rc=${RC}): ${BUILD_ARGS}"
-		echo -e "The script [${SCRIPT_NAME}] produced the following (raw) build arguments:"
-		echo -e "--------------------------------------------------------------------------------"
-		echo -e "${BUILD_ARGS}"
-		echo -e "--------------------------------------------------------------------------------"
+		say "The script [${SCRIPT_NAME}] produced the following (raw) build arguments:"
+		say "--------------------------------------------------------------------------------"
+		say "${BUILD_ARGS}"
+		say "--------------------------------------------------------------------------------"
 	elif [ -f "${FILE}" ] ; then
 		[ -r "${FILE}" ] || fail "The build arguments file [${FILE_NAME}] is not readable"
 		BUILD_ARGS="$(<"${FILE}")" || RC=${?}
 		[ ${RC} -eq 0 ] || fail "Failed to read the build arguments from [${FILE_NAME}] (rc=${RC})"
-		echo -e "The file [${FILE_NAME}] produced the following (raw) build arguments:"
-		echo -e "--------------------------------------------------------------------------------"
-		echo -e "${BUILD_ARGS}"
-		echo -e "--------------------------------------------------------------------------------"
+		say "The file [${FILE_NAME}] produced the following (raw) build arguments:"
+		say "--------------------------------------------------------------------------------"
+		say "${BUILD_ARGS}"
+		say "--------------------------------------------------------------------------------"
 	else
 		continue
 	fi
