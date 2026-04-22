@@ -104,6 +104,12 @@ inputs:
     type: string
     default: ""
 
+  ubuntu-pro-token:
+    description: "The Ubuntu Pro token to be used when building using those features"
+    required: false
+    type: string
+    default: ""
+
   scanner-image:
     description: "The contiainer image to use for vulnerability and compliance scanning"
     required: false
@@ -273,6 +279,7 @@ runs:
         MVN_GET_ENCRYPTION_KEY: ${{ inputs.mvn-get-encryption-key }}
         MVN_GET_USERNAME: ${{ inputs.mvn-get-username }}
         MVN_GET_PASSWORD: ${{ inputs.mvn-get-password }}
+        UBUNTU_PRO_TOKEN: ${{ inputs.ubuntu-pro-token }}
         SCAN_COMP: ${{ inputs.compliance-scan }}
         SCAN_VULN: ${{ inputs.vulnerabilities-scan }}
       shell: bash
