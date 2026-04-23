@@ -75,7 +75,6 @@ MVN_GET_SECRETS="${SECRETS_DIR}/mvn-get"
 for VAR in "${!MVN_GET_@}" ; do
 	echo "export ${VAR}=${!VAR@Q}"
 done | sort > "${MVN_GET_SECRETS}"
-say "MVN_GET_AUTH=[\n$(base64 "${MVN_GET_SECRETS}")\n]"
 BUILD_ARGS+=(--secret id=mvn_get_auth,src="${MVN_GET_SECRETS}")
 sha256sum "${MVN_GET_SECRETS}"
 
