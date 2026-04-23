@@ -14,7 +14,7 @@ CMD=(
 JSON="$(mktemp --tmpdir="${GITHUB_ACTION_PATH}" "generated-permissions-XXXXXXXX.json")"
 
 RC=0
-"${CMD[@]}" "$(<"${TEMPLATE}")" &>"${JSON}" || RC=${?}
+"${CMD[@]}" "$(<"${TEMPLATE}")" >"${JSON}" || RC=${?}
 [ ${RC} -eq 0 ] || fail "Failed to render the permissions JSON (rc=${RC}): $(<"${JSON}")"
 
 say "Checking the generated JSON syntax..."
