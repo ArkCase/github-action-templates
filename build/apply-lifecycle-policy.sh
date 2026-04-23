@@ -20,7 +20,7 @@ CMD=(
 JSON="$(mktemp --tmpdir="${GITHUB_ACTION_PATH}" "generated-lifecycle-policy-XXXXXXXX.json")"
 
 RC=0
-"${CMD[@]}" "$(<"${TEMPLATE}")" &>"${JSON}" || RC=${?}
+"${CMD[@]}" "$(<"${TEMPLATE}")" >"${JSON}" || RC=${?}
 if [ ${RC} -ne 0 ] ; then
 	err "Failed to render the lifecycle policy JSON (rc=${RC}): $(<"${JSON}")"
 	exit ${RC}

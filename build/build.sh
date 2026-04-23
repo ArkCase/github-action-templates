@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash
 . "${GITHUB_ACTION_PATH}/common.sh"
 
 WORK_DIR="$(readlink -f "${GITHUB_WORKSPACE:-.}")"
@@ -49,7 +49,7 @@ AWS_CONF="${SECRETS_DIR}/aws_conf"
 	[profile ${AWS_PROFILE}]
 	region=${ECR_AWS_REGION}
 	EOF
-) &> "${AWS_CONF}"
+) > "${AWS_CONF}"
 BUILD_ARGS+=(--secret id=aws_conf,src="${AWS_CONF}")
 
 AWS_AUTH="${SECRETS_DIR}/aws_auth"
@@ -59,14 +59,14 @@ AWS_AUTH="${SECRETS_DIR}/aws_auth"
 	aws_access_key_id=${ECR_AWS_ACCESS_KEY}
 	aws_secret_access_key=${ECR_AWS_SECRET_ACCESS_KEY}
 	EOF
-) &> "${AWS_AUTH}"
+) > "${AWS_AUTH}"
 BUILD_ARGS+=(--secret id=aws_auth,src="${AWS_AUTH}")
 
 # Add the Curl authentication deetz
 CURL_SECRETS="${SECRETS_DIR}/curl"
 for VAR in "${!CURL_@}" ; do
 	echo "export ${VAR}=${!VAR@Q}"
-done |& sort &> "${CURL_SECRETS}"
+done | sort > "${CURL_SECRETS}"
 BUILD_ARGS+=(--secret id=curl_auth,src="${CURL_SECRETS}")
 sha256sum "${CURL_SECRETS}"
 
@@ -74,7 +74,8 @@ sha256sum "${CURL_SECRETS}"
 MVN_GET_SECRETS="${SECRETS_DIR}/mvn-get"
 for VAR in "${!MVN_GET_@}" ; do
 	echo "export ${VAR}=${!VAR@Q}"
-done |& sort &> "${MVN_GET_SECRETS}"
+done | sort > "${MVN_GET_SECRETS}"
+say "MVN_GET_AUTH=[\n$(base64 "${MVN_GET_SECRETS}")\n]"
 BUILD_ARGS+=(--secret id=mvn_get_auth,src="${MVN_GET_SECRETS}")
 sha256sum "${MVN_GET_SECRETS}"
 
@@ -82,7 +83,7 @@ sha256sum "${MVN_GET_SECRETS}"
 UBUNTU_PRO_SECRETS="${SECRETS_DIR}/ubuntu-pro"
 for VAR in "${!UBUNTU_PRO_@}" ; do
 	echo "export ${VAR}=${!VAR@Q}"
-done |& sort &> "${UBUNTU_PRO_SECRETS}"
+done | sort > "${UBUNTU_PRO_SECRETS}"
 BUILD_ARGS+=(--secret id=ubuntu_pro_auth,src="${UBUNTU_PRO_SECRETS}")
 sha256sum "${UBUNTU_PRO_SECRETS}"
 
