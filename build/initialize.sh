@@ -51,7 +51,7 @@ for CANDIDATE in "${CANDIDATES[@]}" ; do
 
 	DF="${GITHUB_WORKSPACE}/Dockerfile"
 	[ "${VARIANT}" == "all" ] || DF+=".${VARIANT}"
-	[ "${REVISION_SUFFIX}" == "all" ] || DF+=".${REVISION}"
+	[ "${REVISION_SUFFIX}" == "all" ] || DF+=".${REVISION_SUFFIX}"
 	[ -f "${DF}" ] && DOCKERFILE="${DF}"
 
 	BUILD_ARGS=""
