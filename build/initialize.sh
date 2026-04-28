@@ -35,6 +35,7 @@ cleanup()
 }
 trap cleanup EXIT
 
+DOCKERFILE=""
 ARGS_DIR="${GITHUB_WORKSPACE}/.build-args"
 for CANDIDATE in "${CANDIDATES[@]}" ; do
 	[[ "${CANDIDATE}" =~ ^(.*)/(.*)$ ]] || continue
@@ -47,6 +48,11 @@ for CANDIDATE in "${CANDIDATES[@]}" ; do
 
 	FILE_NAME="${VARIANT}/static-${REVISION_SUFFIX}"
 	FILE="${ARGS_DIR}/${FILE_NAME}"
+
+	DF="${GITHUB_WORKSPACE}/Dockerfile"
+	[ "${VARIANT}" == "all" ] || DF+=".${VARIANT}"
+	[ "${REVISION_SUFFIX}" == "all" ] || DF+=".${REVISION}"
+	[ -f "${DF}" ] && DOCKERFILE="${DF}"
 
 	BUILD_ARGS=""
 	RC=0
@@ -88,6 +94,10 @@ for CANDIDATE in "${CANDIDATES[@]}" ; do
 		) | sort | sed -e '/^\s*$/d' > "${ARGS_TEMP}"
 	done <<< "${BUILD_ARGS}"
 done
+
+# Use whatever Dockerfile is available
+[ -n "${DOCKERFILE}" ] || fail "No Dockerfile found!!"
+to_env DOCKERFILE
 
 # Now we output the variables, only keeping the last definition
 # (this may be unnecessary, but is a good safety measure anyway)
