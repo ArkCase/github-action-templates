@@ -360,7 +360,7 @@ RC=0
 
 	say "Launching the Docker build..."
 	set -x
-	exec docker build "${BUILD_ARGS[@]}" --tag "${AUTHORITATIVE_TAG}" .
+	exec docker build --file "${DOCKERFILE}" "${BUILD_ARGS[@]}" --tag "${AUTHORITATIVE_TAG}" .
 ) || RC=${?}
 find "${SECRETS_DIR}" -type f -exec shred -u "{}" ";" || true
 rm -rf "${SECRETS_DIR}" || true

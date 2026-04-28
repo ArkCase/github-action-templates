@@ -91,12 +91,6 @@ PUBLISH_MAJOR=""
 PUBLISH_MINOR=""
 
 #
-# TODO: this is in preparation for supporting different
-# Dockerfiles based on version/variant (and combo)
-#
-DOCKERFILE="${GITHUB_WORKSPACE}/Dockerfile"
-
-#
 # If we weren't given a REVISION or a PORTAL_VER we want to "parse"
 # the Dockerfile and get the default values for any ARG declarations
 # since these will give us the default values we should use.
