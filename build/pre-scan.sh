@@ -21,6 +21,10 @@ mkdir -p "${SCAN_TGT_DIR}"
 # Now define all of the other variables!
 #
 
+# Propagate these two so we don't have to import them everywhere
+to_env SCAN_COMP
+to_env SCAN_VULN
+
 # TODO: account for the branch name!
 to_env COMP_REPORT_BASE="compliance${ARTIFACT_IDENTIFIER}"
 to_env COMP_REPORT_PATH="${SCAN_TGT_DIR}/${COMP_REPORT_BASE}"

@@ -287,6 +287,9 @@ runs:
        "${GITHUB_ACTION_PATH}/build.sh"
 
     - name: Prepare for Security Scans
+      env:
+        SCAN_COMP: ${{ inputs.compliance-scan }}
+        SCAN_VULN: ${{ inputs.vulnerabilities-scan }}
       if: ${{ (env.SCAN_VULN == 'true') || (env.SCAN_COMP == 'true') }}
       shell: bash
       run: |
