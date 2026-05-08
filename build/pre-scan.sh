@@ -21,11 +21,6 @@ mkdir -p "${SCAN_TGT_DIR}"
 # Now define all of the other variables!
 #
 
-# Propagate these two so we don't have to import them everywhere
-to_env SCAN_COMP
-to_env SCAN_VULN
-
-# TODO: account for the branch name!
 to_env COMP_REPORT_BASE="compliance${ARTIFACT_IDENTIFIER}"
 to_env COMP_REPORT_PATH="${SCAN_TGT_DIR}/${COMP_REPORT_BASE}"
 to_env COMP_REPORT_PATTERN="${COMP_REPORT_PATH}.*"
@@ -34,7 +29,6 @@ to_env COMP_REPORT_HDF_SOURCE="${COMP_REPORT_PATH}.hdf"
 to_env COMP_REPORT_HTML_SOURCE="${COMP_REPORT_PATH}.html"
 to_env COMP_REPORT_SARIF_SOURCE="${COMP_REPORT_PATH}.sarif"
 
-# TODO: account for the branch name!
 to_env VULN_REPORT_BASE="vulnerabilities${ARTIFACT_IDENTIFIER}"
 to_env VULN_REPORT_PATH="${SCAN_TGT_DIR}/${VULN_REPORT_BASE}"
 to_env VULN_REPORT_PATTERN="${VULN_REPORT_PATH}.*"
