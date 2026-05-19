@@ -46,7 +46,6 @@ done
 # Otherwise, we fall back to these values to avoid failing the parse.
 declare -gx "PRIVATE_REGISTRY=${PRIVATE_REGISTRY}"
 declare -gx "PUBLIC_REGISTRY=${PUBLIC_REGISTRY}"
-declare -gx "BASE_REGISTRY=${PRIVATE_REGISTRY}"
 
 DECLARATIONS="$(extract_declarations 2>&1)" || fail "Failed to extract the ARG declarations (rc=${?}): ${DECLARATIONS}"
 
