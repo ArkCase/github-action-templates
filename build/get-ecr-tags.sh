@@ -1,6 +1,8 @@
 #!/bin/bash
 
-set -euo pipefail
+# So we can test it *REPEATEDLY*
+[ -v GITHUB_ACTION_PATH ] || export GITHUB_ACTION_PATH="$(dirname "$(readlink -f "${0}")")"
+
 . "${GITHUB_ACTION_PATH}/common.sh"
 
 usage()
