@@ -1,6 +1,24 @@
 #!/bin/bash
 . "${GITHUB_ACTION_PATH}/common.sh"
 
+# Disable for now - we need a cleaner way. When running parallel builds
+# (i.e. with multi-version builds), this might clear out the artifacts
+# just uploaded by other builds running in parallel, so it becomes a race
+# to see who survives.
+#
+# This is CLEARLY not what we want, so we need to figure out the clean way to
+# do this so we can clear out ALL the artifacts for ALL the builds launched
+# prior to this *OVERALL* build (i.e. including all parallel builds), while
+# also doing so at the last possible moment so we only do it if the build
+# was successful AND a scan (of the corresponding type) was requested and
+# successful... at that moment we would delete whatever needs deleting,
+# and replace it with whatever needs replacing.
+#
+# We need to figure out how to determine that, and at that point we can
+# proceed to delete the old crap to only keep the very latest.
+#
+exit 0
+
 run_gh()
 {
 	local URI="${1}"
