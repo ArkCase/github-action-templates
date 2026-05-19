@@ -284,7 +284,7 @@ runs:
         SCAN_VULN: ${{ inputs.vulnerabilities-scan }}
       shell: bash
       run: |
-       "${GITHUB_ACTION_PATH}/build.sh"
+        "${GITHUB_ACTION_PATH}/build.sh"
 
     - name: Prepare for Security Scans
       if: ${{ (env.SCAN_VULN == 'true') || (env.SCAN_COMP == 'true') }}
