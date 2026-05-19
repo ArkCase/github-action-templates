@@ -1,24 +1,6 @@
 #!/bin/bash
 . "${GITHUB_ACTION_PATH}/common.sh"
 
-# Disable for now - we need a cleaner way. When running parallel builds
-# (i.e. with multi-version builds), this might clear out the artifacts
-# just uploaded by other builds running in parallel, so it becomes a race
-# to see who survives.
-#
-# This is CLEARLY not what we want, so we need to figure out the clean way to
-# do this so we can clear out ALL the artifacts for ALL the builds launched
-# prior to this *OVERALL* build (i.e. including all parallel builds), while
-# also doing so at the last possible moment so we only do it if the build
-# was successful AND a scan (of the corresponding type) was requested and
-# successful... at that moment we would delete whatever needs deleting,
-# and replace it with whatever needs replacing.
-#
-# We need to figure out how to determine that, and at that point we can
-# proceed to delete the old crap to only keep the very latest.
-#
-exit 0
-
 run_gh()
 {
 	local URI="${1}"
@@ -38,14 +20,35 @@ run_gh()
 list_artifacts()
 {
 	local NAME_PREFIX="${1}"
-	local FILTER='.artifacts[] | select(.workflow_run.head_branch==$BRANCH) | select(select(.name | test("^\($NAME_PREFIX)([^a-zA-Z0-9_].*)?$"))) | [ .id, .name, .size_in_bytes, .created_at ] | @tsv'
-	run_gh "/repos/${GITHUB_REPOSITORY}/actions/artifacts" | \
-			jq -r --arg BRANCH "${GITHUB_REF_NAME}" --arg NAME_PREFIX "${NAME_PREFIX}" "${FILTER}"
+
+	local RC=0
+	local LIST=""
+	LIST="$(run_gh "/repos/${GITHUB_REPOSITORY}/actions/artifacts" 2>&1)" || RC=${?}
+	if [ ${RC} != 0 ] ; then
+		echo "${LIST}"
+		return ${RC}
+	fi
+
+	# We filter by branch, name prefix, and run id so we don't
+	# clobber artifacts being uploaded by this specific run, and
+	# only delete artifacts added by other, older runs
+	local FILTER='.artifacts[] | select(.workflow_run.head_branch==$BRANCH) | select(.workflow_run.id != $RUN_ID) | select(select(.name | test("^\($NAME_PREFIX)([^a-zA-Z0-9_].*)?$"))) | [ .id, .name, .size_in_bytes, .created_at, .workflow_run.id, .workflow_run.head_branch ] | @tsv'
+	local CMD=(
+		jq -r
+			--argjson RUN_ID "${GITHUB_RUN_ID}"
+			--arg BRANCH "${GITHUB_REF_NAME}"
+			--arg NAME_PREFIX "${NAME_PREFIX}"
+			"${FILTER}"
+	)
+	"${CMD[@]}" || return ${?}
+	return 0
 }
 
 delete_artifact()
 {
 	local ARTIFACT_ID="${1}"
+	echo "DELETE: /repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}"
+	return 1
 	run_gh "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}" "DELETE"
 }
 
@@ -73,7 +76,7 @@ for TYPE in "${TYPES[@]}" ; do
 	say "Deleting all the existing [${NAME_PREFIX}*] artifacts for the [${GITHUB_REF_NAME}] branch"
 	while read LINE ; do
 		[ -n "${LINE}" ] || continue
-		read ID NAME SIZE CREATED_AT <<< "${LINE}"
+		read ID NAME SIZE CREATED_AT RUN_ID BRANCH <<< "${LINE}"
 		echo "${LINE}"
 		IDS+=( "${ID}" )
 		(( TOTAL_SIZE += SIZE )) || true
@@ -83,5 +86,5 @@ for TYPE in "${TYPES[@]}" ; do
 	for ID in "${IDS[@]}" ; do
 		OUT="$(delete_artifact "${ID}" 2>&1)" || err "Failed to delete the artifact with ID ${ID} (rc=${?}): ${OUT}"
 	done
-	ok "Deleted ${#IDS[@]} existing artifacts"
+	ok "Deleted ${#IDS[@]} existing artifacts, $(printf "%'d" "${TOTAL_SIZE}") bytes"
 done
