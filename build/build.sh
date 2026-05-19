@@ -16,12 +16,17 @@ BUILD_ARGS+=(--build-arg "PRIVATE_REGISTRY=${PRIVATE_REGISTRY}")
 BUILD_ARGS+=(--build-arg "PUBLIC_REGISTRY=${PUBLIC_REGISTRY}")
 BUILD_ARGS+=(--build-arg "BASE_VER_PFX=${REVISION_PREFIX}")
 
+# If this container is not meant to be public, we pivot
+# to using the PRIVATE_REGISTRY as the BASE_REGISTRY
+"${PUSH_TO_PUBLIC}" || BUILD_ARGS+=(--build-arg "BASE_REGISTRY=${PRIVATE_REGISTRY}")
+
 # Apply the predefined BUILD_ARG_* arguments
 for VAR in "${!BUILD_ARG_@}" ; do
 	[[ "${VAR}" =~ ^BUILD_ARG_(.+)$ ]] || continue
 	ARG="${BASH_REMATCH[1]}"
 	case "${ARG}" in
 		FIPS | \
+		BASE_REGISTRY | \
 		PRIVATE_REGISTRY | \
 		PUBLIC_REGISTRY | \
 		BASE_VER_PFX | \
