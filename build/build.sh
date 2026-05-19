@@ -222,17 +222,25 @@ if [ -z "${REVISION_PRERELEASE}" ] ; then
 		# markers that are actually noise at this specific juncture. We
 		# do it like this so we only query the list twice.
 		if is_local_dev ; then
-			# TODO: get the tags using standard docker registry APIs ... how?!?!
-			ALL_REVISIONS=""
+			CMD=("${GITHUB_ACTION_PATH}/get-repo-tags.sh" "${REG}" "${IMAGE_URI}")
 		else
-			ALL_REVISIONS="$("${GITHUB_ACTION_PATH}/get-ecr-tags.sh" "${ECR}" "${QUERY}")" || ALL_REVISIONS=""
-			[ -n "${ALL_REVISIONS}" ] && ALL_REVISIONS="$(
-				echo "${ALL_REVISIONS}" | \
-				grep -E "^${REVISION_PREFIX}${RE_REVISION_SELECTOR}" | \
-				sed  -e "s;^${REVISION_PREFIX};;g" -e "s;[-_].*$;;g" | \
-				sort --version-sort --unique --reverse
-			)" || ALL_REVISIONS=""
+			CMD=("${GITHUB_ACTION_PATH}/get-ecr-tags.sh" "${ECR}" "${QUERY}")
 		fi
+
+		RC=0
+		ALL_REVISIONS="$( "${CMD[@]}" 2>&1 )" || RC=${?}
+		if [ ${RC} -ne 0 ] ; then
+			# Spit out the error, but keep going ...
+			echo -e "${ALL_REVISIONS}"
+			ALL_REVISIONS=""
+		fi
+
+		[ -n "${ALL_REVISIONS}" ] && ALL_REVISIONS="$(
+			echo "${ALL_REVISIONS}" | \
+			grep -E "^${REVISION_PREFIX}${RE_REVISION_SELECTOR}" | \
+			sed  -e "s;^${REVISION_PREFIX};;g" -e "s;[-_].*$;;g" | \
+			sort --version-sort --unique --reverse
+		)" || ALL_REVISIONS=""
 
 		# We have a possible maximum of 3 "latest" tags to create:
 		#

@@ -1,9 +1,20 @@
 #!/bin/bash
 
 set -euo pipefail
+. "${GITHUB_ACTION_PATH}/common.sh"
+
+usage()
+{
+	echo -e "usage: ${BASH_ARGV0:-${BASH_SOURCE:-${0}}} (ecr | ecr-public) name-or-uri"
+	exit 1
+}
+
+[ ${#} -eq 2 ] || usage
 
 ECR="${1}"
 QUERY="${2}"
-JQ_FIND_IMAGE_TAGS='.imageDetails[] | select(has("imageTags")) | .imageTags[]'
 
-exec aws "${ECR}" describe-images --repository-name "${QUERY}" | jq -r "${JQ_FIND_IMAGE_TAGS}"
+CMD=( aws "${ECR}" describe-images --repository-name "${QUERY}" )
+DATA="$("${CMD[@]}" 2>&1)" || fail "Failed to fetch the image tag list for [${QUERY}] from [${ECR}] (rc=${?}): ${DATA}"
+jq -r '.imageDetails[] | select(has("imageTags")) | .imageTags[]' <<< "${DATA}" 2>&1 || fail "Failed to parse the image tag list for [${QUERY}] from [${ECR}] (rc=${?})"
+exit 0
