@@ -30,21 +30,81 @@
       }
     },
     {
-      "rulePriority": 230,
-      "description": "Keep only the PRERELEASE containers built in the past \($PRERELEASE_KEEP_DAYS) days",
+      "rulePriority": 210,
+      "description": "Keep only the TEST containers built in the past \($PRERELEASE_KEEP_DAYS) days",
       "selection": {
         "tagStatus": "tagged",
         "tagPatternList": [
           "*-TEST",
           "*-TEST_b*",
-          "*-TEST-*",
+          "*-TEST-*"
+        ],
+        "countType": "sinceImagePushed",
+        "countUnit": "days",
+        "countNumber": $PRERELEASE_KEEP_DAYS
+      },
+      "action": {
+        "type": "expire"
+      }
+    },
+    {
+      "rulePriority": 220,
+      "description": "Keep only the EVAL containers built in the past \($PRERELEASE_KEEP_DAYS) days",
+      "selection": {
+        "tagStatus": "tagged",
+        "tagPatternList": [
           "*-EVAL",
           "*-EVAL_b*",
-          "*-EVAL-*",
+          "*-EVAL-*"
+        ],
+        "countType": "sinceImagePushed",
+        "countUnit": "days",
+        "countNumber": $PRERELEASE_KEEP_DAYS
+      },
+      "action": {
+        "type": "expire"
+      }
+    },
+    {
+      "rulePriority": 230,
+      "description": "Keep only the MILESTONE containers built in the past \($PRERELEASE_KEEP_DAYS) days",
+      "selection": {
+        "tagStatus": "tagged",
+        "tagPatternList": [
           "*-M-*",
-          "*-M.*",
+          "*-M.*"
+        ],
+        "countType": "sinceImagePushed",
+        "countUnit": "days",
+        "countNumber": $PRERELEASE_KEEP_DAYS
+      },
+      "action": {
+        "type": "expire"
+      }
+    },
+    {
+      "rulePriority": 240,
+      "description": "Keep only the RELEASE CANDIDATE containers built in the past \($PRERELEASE_KEEP_DAYS) days",
+      "selection": {
+        "tagStatus": "tagged",
+        "tagPatternList": [
           "*-RC-*",
-          "*-RC.*",
+          "*-RC.*"
+        ],
+        "countType": "sinceImagePushed",
+        "countUnit": "days",
+        "countNumber": $PRERELEASE_KEEP_DAYS
+      },
+      "action": {
+        "type": "expire"
+      }
+    },
+    {
+      "rulePriority": 250,
+      "description": "Keep only the SPRINT DEMO containers built in the past \($PRERELEASE_KEEP_DAYS) days",
+      "selection": {
+        "tagStatus": "tagged",
+        "tagPatternList": [
           "*-SP-*"
         ],
         "countType": "sinceImagePushed",
