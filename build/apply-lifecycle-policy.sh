@@ -21,7 +21,7 @@ for TYPE in "${TYPES[@]}" ; do
 	[ -v "${DEF}" ] && [[ "${!DEF}" =~ ^(0|[1-9][0-9]*)$ ]] && DEF="${!DEF}" || DEF="${DEFAULT_KEEP_DAYS}"
 
 	# Validate the variable's value, and apply the default if invalid
-	[ -v "${VAR}" ] && [[ "${!VAR}" =~ ^(0|[1-9][0-9]*)$ ]] || VAR="${DEF}"
+	[ -v "${VAR}" ] && [[ "${!VAR}" =~ ^(0|[1-9][0-9]*)$ ]] || declare -gx "${VAR}=${DEF}"
 
 	# Add the JQ arguments
 	JQ_ARGS+=( --argjson "${VAR}" "${!VAR}" )
