@@ -3,35 +3,39 @@
 
 TEMPLATE="${GITHUB_ACTION_PATH}/template-lifecycle-policy.json"
 
-DEFAULT_SNAPSHOT_KEEP_DAYS="30"
-[ -n "${SNAPSHOT_KEEP_DAYS:-}" ] || SNAPSHOT_KEEP_DAYS="${DEFAULT_SNAPSHOT_KEEP_DAYS}"
+DEFAULT_KEEP_DAYS="30"
+# DEFAULT_SNAPSHOT_KEEP_DAYS="30"
+DEFAULT_PRERELEASE_KEEP_DAYS="90"
+DEFAULT_DEMO_KEEP_DAYS="365"
+# DEFAULT_DEVEL_KEEP_DAYS="30"
 
-DEFAULT_DEVEL_KEEP_DAYS="30"
-[ -n "${DEVEL_KEEP_DAYS:-}" ] || DEVEL_KEEP_DAYS="${DEFAULT_DEVEL_KEEP_DAYS}"
+TYPES=( SNAPSHOT PRERELEASE DEMO DEVEL )
 
-CMD=(
-	jq -n
-		--argjson DEVEL_KEEP_DAYS "${DEVEL_KEEP_DAYS}"
-		--arg DEVEL_KEEP_STR "Keep only the top-level SNAPSHOTS built in the past ${SNAPSHOT_KEEP_DAYS} days"
-		--argjson SNAPSHOT_KEEP_DAYS "${SNAPSHOT_KEEP_DAYS}"
-		--arg SNAPSHOT_KEEP_STR "Keep only fresh-built devel-* tags that AREN'T the top-level SNAPSHOTs, pushed in the last ${DEVEL_KEEP_DAYS} days"
-)
+JQ_ARGS=()
+for TYPE in "${TYPES[@]}" ; do
+	# First, construt the variable name
+	VAR="${TYPE}_KEEP_DAYS"
 
-JSON="$(mktemp --tmpdir="${GITHUB_ACTION_PATH}" "generated-lifecycle-policy-XXXXXXXX.json")"
+	# Compute the default
+	DEF="DEFAULT_${VAR}"
+	[ -v "${DEF}" ] && [[ "${!DEF}" =~ ^(0|[1-9][0-9]*)$ ]] && DEF="${!DEF}" || DEF="${DEFAULT_KEEP_DAYS}"
+
+	# Validate the variable's value, and apply the default if invalid
+	[ -v "${VAR}" ] && [[ "${!VAR}" =~ ^(0|[1-9][0-9]*)$ ]] || VAR="${DEF}"
+
+	# Add the JQ arguments
+	JQ_ARGS+=( --argjson "${VAR}" "${!VAR}" )
+done
 
 RC=0
-"${CMD[@]}" "$(<"${TEMPLATE}")" >"${JSON}" || RC=${?}
-if [ ${RC} -ne 0 ] ; then
-	err "Failed to render the lifecycle policy JSON (rc=${RC}): $(<"${JSON}")"
-	exit ${RC}
-fi
+JSON="$(mktemp --tmpdir="${GITHUB_ACTION_PATH}" "generated-lifecycle-policy-XXXXXXXX.json")" || fail "Failed to create a temporary file for the lifecycle policy"
+CMD=( jq -n "${JQ_ARGS[@]}" -f "${TEMPLATE}" )
+"${CMD[@]}" &>"${JSON}" || RC=${?}
+[ "${RC}" -eq 0 ] || fail "Failed to render the lifecycle policy JSON (rc=${RC}): $(<"${JSON}")"
 
 say "Checking the generated JSON syntax..."
 OUT="$(jq -r < "${JSON}" 2>&1)" || RC=${?}
-if [ ${RC} -ne 0 ] ; then
-	err "The rendered JSON has errors (rc=${RC}): ${OUT}\n\n$(<"${JSON}")"
-	exit ${RC}
-fi
+[ ${RC} -eq 0 ] || fail "The rendered JSON has errors (rc=${RC}): ${OUT}\n\n$(<"${JSON}")"
 
 say "Applying the generated lifecycle policy:\n$(<"${JSON}")"
 CMD=(
