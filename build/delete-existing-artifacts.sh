@@ -40,7 +40,7 @@ list_artifacts()
 			--arg NAME_PREFIX "${NAME_PREFIX}"
 			"${FILTER}"
 	)
-	"${CMD[@]}" || return ${?}
+	"${CMD[@]}" <<< "${LIST}" || return ${?}
 	return 0
 }
 
