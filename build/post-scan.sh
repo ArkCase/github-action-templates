@@ -27,4 +27,14 @@ CMD=(
 		tar -czf - .
 )
 
-"${CMD[@]}" | tar -C "${SCAN_TGT_DIR}" -xzvf -
+"${CMD[@]}" | tar -C "${SCAN_TGT_DIR}" -xzvf - || fail "Failed to download the scan results (rc=${?})"
+
+#
+# Delete all prior artifacts present for this branch. This
+# significantly simplifies life when doing provenance/vulnerability
+# checking, without risking history b/c the reports are being
+# uploaded to S3 anyway, which means there are ample backups
+# being kept for posterity.
+#
+
+exec "${GITHUB_ACTION_PATH}/delete-existing-artifacts.sh"
