@@ -47,8 +47,6 @@ list_artifacts()
 delete_artifact()
 {
 	local ARTIFACT_ID="${1}"
-	echo "DELETE: /repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}"
-	return 1
 	run_gh "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}" "DELETE"
 }
 
