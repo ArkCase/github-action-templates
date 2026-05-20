@@ -66,7 +66,6 @@ TYPES=(
 	COMP:compliance
 )
 
-TOTAL_SIZE="0"
 for TYPE in "${TYPES[@]}" ; do
 	IFS=":" read TYPE NAME_PREFIX <<< "${TYPE}"
 
@@ -75,6 +74,8 @@ for TYPE in "${TYPES[@]}" ; do
 	VAR="${!VAR}"
 	[ "${VAR,,}" == "true" ] || continue
 
+	IDS=()
+	TOTAL_SIZE="0"
 	PAGE=0
 	say "Deleting all the existing [${NAME_PREFIX}*] artifacts for the [${GITHUB_REF_NAME}] branch"
 	while true ; do
@@ -89,7 +90,6 @@ for TYPE in "${TYPES[@]}" ; do
 
 		[ -n "${LIST}" ] || break
 
-		IDS=()
 		while read LINE ; do
 			[ -n "${LINE}" ] || continue
 			read ID NAME SIZE CREATED_AT RUN_ID BRANCH <<< "${LINE}"
