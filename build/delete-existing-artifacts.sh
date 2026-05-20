@@ -79,7 +79,13 @@ for TYPE in "${TYPES[@]}" ; do
 	say "Deleting all the existing [${NAME_PREFIX}*] artifacts for the [${GITHUB_REF_NAME}] branch"
 	while true ; do
 		(( ++PAGE ))
-		LIST="$(list_artifacts "${NAME_PREFIX}" "${PAGE}" 2>&1)" || fail "Failed to list the ${NAME_PREFIX} artifacts (page ${PAGE}) (rc=${?}): ${LIST}"
+		RC=0
+		LIST="$(list_artifacts "${NAME_PREFIX}" "${PAGE}" 2>&1)" || RC=${?}
+		if [ ${RC} -ne 0 ] ; then
+			# Temporary workaround for a dumb boo-boo on my part :)
+			err "Failed to list the ${NAME_PREFIX} artifacts (page ${PAGE}) (rc=${?}): ${LIST}"
+			break
+		fi
 
 		[ -n "${LIST}" ] || break
 
