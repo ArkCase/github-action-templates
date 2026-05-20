@@ -48,6 +48,7 @@ list_artifacts()
 delete_artifact()
 {
 	local ARTIFACT_ID="${1}"
+	is_local_dev && ok "Fake-deleted the artifact with ID [${ARTIFACT_ID}]" && return 0
 	run_gh "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}" "DELETE"
 }
 
@@ -100,6 +101,8 @@ for TYPE in "${TYPES[@]}" ; do
 	done
 
 	TOTAL_ARTIFACTS="${#IDS[@]}"
+	[ ${TOTAL_ARTIFACTS} -eq 0 ] && ok "No artifacts found to delete" && continue
+
 	running "Start deletion (${TOTAL_ARTIFACTS} artifacts found)..."
 	for ID in "${IDS[@]}" ; do
 		OUT="$(delete_artifact "${ID}" 2>&1)" || err "Failed to delete the artifact with ID ${ID} (rc=${?}): ${OUT}"
