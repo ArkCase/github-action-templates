@@ -51,6 +51,12 @@ delete_artifact()
 	run_gh "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}" "DELETE"
 }
 
+format_size()
+{
+	local SIZE="${1}"
+	numfmt --to=iec-i --format="%.2f" <<< "${SIZE}"
+}
+
 #
 # Let's now do the deed!
 #
@@ -75,6 +81,8 @@ for TYPE in "${TYPES[@]}" ; do
 		(( ++PAGE ))
 		LIST="$(list_artifacts "${NAME_PREFIX}" "${PAGE}" 2>&1)" || fail "Failed to list the ${NAME_PREFIX} artifacts (page ${PAGE}) (rc=${?}): ${LIST}"
 
+		[ -n "${LIST}" ] || break
+
 		IDS=()
 		while read LINE ; do
 			[ -n "${LINE}" ] || continue
@@ -90,5 +98,5 @@ for TYPE in "${TYPES[@]}" ; do
 	for ID in "${IDS[@]}" ; do
 		OUT="$(delete_artifact "${ID}" 2>&1)" || err "Failed to delete the artifact with ID ${ID} (rc=${?}): ${OUT}"
 	done
-	ok "Deleted $(printf "%'d" "${TOTAL_SIZE}") bytes"
+	ok "Deleted $(format_size "${TOTAL_SIZE}")"
 done
