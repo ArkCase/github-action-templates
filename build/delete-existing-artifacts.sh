@@ -20,10 +20,11 @@ run_gh()
 list_artifacts()
 {
 	local NAME_PREFIX="${1}"
+	local PAGE="${2}"
 
 	local RC=0
 	local LIST=""
-	LIST="$(run_gh "/repos/${GITHUB_REPOSITORY}/actions/artifacts" 2>&1)" || RC=${?}
+	LIST="$(run_gh "/repos/${GITHUB_REPOSITORY}/actions/artifacts?page=${PAGE}&per_page=100" 2>&1)" || RC=${?}
 	if [ ${RC} != 0 ] ; then
 		echo "${LIST}"
 		return ${RC}
@@ -68,21 +69,26 @@ for TYPE in "${TYPES[@]}" ; do
 	VAR="${!VAR}"
 	[ "${VAR,,}" == "true" ] || continue
 
-	LIST="$(list_artifacts "${NAME_PREFIX}" 2>&1)" || fail "Failed to list the ${NAME_PREFIX} artifacts (rc=${?}): ${LIST}"
-
-	IDS=()
+	PAGE=0
 	say "Deleting all the existing [${NAME_PREFIX}*] artifacts for the [${GITHUB_REF_NAME}] branch"
-	while read LINE ; do
-		[ -n "${LINE}" ] || continue
-		read ID NAME SIZE CREATED_AT RUN_ID BRANCH <<< "${LINE}"
-		echo "${LINE}"
-		IDS+=( "${ID}" )
-		(( TOTAL_SIZE += SIZE )) || true
-	done <<< "${LIST}"
+	while true ; do
+		(( ++PAGE ))
+		LIST="$(list_artifacts "${NAME_PREFIX}" "${PAGE}" 2>&1)" || fail "Failed to list the ${NAME_PREFIX} artifacts (page ${PAGE}) (rc=${?}): ${LIST}"
 
-	running "Start deletion..."
+		IDS=()
+		while read LINE ; do
+			[ -n "${LINE}" ] || continue
+			read ID NAME SIZE CREATED_AT RUN_ID BRANCH <<< "${LINE}"
+			echo "${LINE}"
+			IDS+=( "${ID}" )
+			(( TOTAL_SIZE += SIZE )) || true
+		done <<< "${LIST}"
+	done
+
+	TOTAL_ARTIFACTS="${#IDS[@]}"
+	running "Start deletion (${TOTAL_ARTIFACTS} artifacts found)..."
 	for ID in "${IDS[@]}" ; do
 		OUT="$(delete_artifact "${ID}" 2>&1)" || err "Failed to delete the artifact with ID ${ID} (rc=${?}): ${OUT}"
 	done
-	ok "Deleted ${#IDS[@]} existing artifacts, $(printf "%'d" "${TOTAL_SIZE}") bytes"
+	ok "Deleted $(printf "%'d" "${TOTAL_SIZE}") bytes"
 done
