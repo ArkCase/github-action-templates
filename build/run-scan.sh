@@ -20,16 +20,27 @@ DOCKER_SOCKET="/var/run/docker.sock"
 CONTAINER_NAME_SUFFIX="${IMAGE_URI//\//-}"
 [ -n "${ARTIFACT_IDENTIFIER}" ] && CONTAINER_NAME_SUFFIX+="-${ARTIFACT_IDENTIFIER}"
 
-# Compute the scanner image, and use a default if needed
-if [ -n "${SCANNER_IMAGE:-}" ] ; then
-	# This allows for the use of ${VAR} in the scanner image specification
-	VARS=( '$PUBLIC_REGISTRY' '$PRIVATE_REGISTRY' '$REVISION_PREFIX' )
-	NEW_SCANNER_IMAGE="$(echo -n "${SCANNER_IMAGE}" | envsubst "${VARS[*]}")"
-	[ -n "${NEW_SCANNER_IMAGE}" ] || fail "The scanner image spec [${SCANNER_IMAGE}] resolved to an empty string!"
-	SCANNER_IMAGE="${NEW_SCANNER_IMAGE}"
-else
-	SCANNER_IMAGE="${PRIVATE_REGISTRY}/arkcase/security-scanner:latest"
-fi
+#
+# The base value of SCANNER_IMAGE comes from the action's inputs. If
+# it's not provided (i.e. it's an empty string or undefined), then we
+# use the value from DEFAULT_SCANNER_IMAGE
+#
+
+# If no default is defined elsewhere, we use this value
+[ -n "${DEFAULT_SCANNER_IMAGE:-}" ] || DEFAULT_SCANNER_IMAGE="${PRIVATE_REGISTRY}/arkcase/security-scanner:latest"
+
+# If the variable isn't already set or was set empty, use the default image
+[ -n "${SCANNER_IMAGE:-}" ] || SCANNER_IMAGE="${DEFAULT_SCANNER_IMAGE}"
+
+# This allows for the use of ${VAR} in the scanner image specification
+VARS=( '$PUBLIC_REGISTRY' '$PRIVATE_REGISTRY' '$REVISION_PREFIX' )
+NEW_SCANNER_IMAGE="$(echo -n "${SCANNER_IMAGE}" | envsubst "${VARS[*]}")"
+[ -n "${NEW_SCANNER_IMAGE}" ] \
+	&& SCANNER_IMAGE="${NEW_SCANNER_IMAGE}" \
+	|| fail "The scanner image spec [${SCANNER_IMAGE}] resolved to an empty string!"
+
+# Clean up
+unset NEW_SCANNER_IMAGE
 
 CMD=(
 	docker run
