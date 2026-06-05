@@ -24,7 +24,7 @@ CONTAINER_NAME_SUFFIX="${IMAGE_URI//\//-}"
 if [ -n "${SCANNER_IMAGE:-}" ] ; then
 	# This allows for the use of ${VAR} in the scanner image specification
 	VARS=( '$PUBLIC_REGISTRY' '$PRIVATE_REGISTRY' '$REVISION_PREFIX' )
-	NEW_SCANNER_IMAGE="$(echo -n "${SCANNER_IMAGE}" | envsubst "${VARS[@]}")"
+	NEW_SCANNER_IMAGE="$(echo -n "${SCANNER_IMAGE}" | envsubst "${VARS[*]}")"
 	[ -n "${NEW_SCANNER_IMAGE}" ] || fail "The scanner image spec [${SCANNER_IMAGE}] resolved to an empty string!"
 	SCANNER_IMAGE="${NEW_SCANNER_IMAGE}"
 else
