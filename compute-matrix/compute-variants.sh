@@ -3,11 +3,49 @@
 #
 set -euo pipefail
 
+# This one is required if no other variants are identified
+MINIMUM_VARIANT="main"
+
+#
+# Convert a CSV/space-separated list into a line-separated list,
+# since this will make it easier to process by a 'while read'
+# loop. We also fold to lowercase, as well as sorting and
+# removing duplicates
+#
+csv_to_list()
+{
+	sed -e 's;\s;,;g' -e 's;,+;,;g' -e 's;^,;;g' -e 's;,$;;g' | \
+		tr '[[:upper:]]' '[[:lower:]]' | \
+		tr '[,[:space:]]' '\n' | \
+		sed -e '/^\s*$/d' | \
+		sort -u
+}
+
+invalid_variants()
+{
+	[ ${#} -eq 0 ] && return 0
+	echo -e "Invalid variants [ ${@@Q} ]"
+	exit 1
+}
+
+output_variants()
+{
+	#
+	# This should yield the required output
+	#
+	local VARS="${*}"
+	echo "value=$(echo -n "${VARS}" | csv_to_list | jq -Rcn '[inputs]')"
+	exit 0
+}
+
+#
+# If this variable is set, it's a CSV including all the variants
+# that should be built. It'll be up to the build if it knows what
+# to do with each of them. If the list is empty, the default
+# behavior will take over.
+#
 if [ -n "${VARIANTS_OVERRIDE:-}" ] ; then
-	# If this variable is set, it's a CSV including all the variants
-	# that should be built. It'll be up to the build if it knows what
-	# to do with each of them. If the list is empty, the default
-	# behavior will take over.
+	echo -e "Examining VARIANTS_OVERRIDE=${VARIANTS_OVERRIDE@Q}"
 	VARIANTS=()
 	INVALID=()
 	RE_VARIANT="[a-z0-9]([-a-z0-9]*[a-z0-9])?"
@@ -21,49 +59,47 @@ if [ -n "${VARIANTS_OVERRIDE:-}" ] ; then
 		else
 			INVALID+=( "${VARIANT}" )
 		fi
-	done < <(echo "${VARIANTS_OVERRIDE}" | tr '[[:upper:]]' '[[:lower:]]' | tr '[,[:space:]]' '\n' | sed -e '/^\s*$/d' | sort -u)
+	done < <(echo "${VARIANTS_OVERRIDE}" | csv_to_list)
 
-	if [ ${#INVALID[@]} -gt 0 ] ; then
-		echo -e "Invalid variants [ ${INVALID[@]@Q} ] found in VARIANTS_OVERRIDE=${VARIANTS_OVERRIDE@Q}"
-		exit 1
-	fi
+	# If there are no invalids, this returns cleanly, otherwise it fails the build
+	invalid_variants "${INVALID[@]}"
 
-	# Spit out the specific list of variants the user
-	# wants to build, with no additional considerations
-	echo "value=[${VARIANTS[@]@Q}]" | tr ' ' ',' | tr "'" '"' >> "${GITHUB_OUTPUT}"
-	exit 0
+	output_variants "${VARIANTS[@]}" >> "${GITHUB_OUTPUT}"
 fi
 
 #
-# The main variant - ever present!
+# Sanitize parameters
 #
-CANDIDATE_VARIANTS=( "main" )
+
+DEFAULT_VARIANTS="${MINIMUM_VARIANT}"
+[ -v PARAM_VARIANTS ] || PARAM_VARIANTS=""
+
+VARIANTS=()
+INVALID=()
+VARIANT_LIST="${PARAM_VARIANTS:-${DEFAULT_VARIANTS}}"
+echo -e "Examining the variants from [ ${VARIANT_LIST@Q} ]"
+while read VARIANT ; do
+	case "${VARIANT}" in
+		# The main variant requires no black magic
+		main ) VARIANTS+=( "${VARIANT}" ) ;;
+
+		# FIPS requires some checking first before accepting it
+		fips ) grep -qE "^ARG\s+FIPS(=.*)?\s*$" "${GITHUB_WORKSPACE}/Dockerfile" && VARIANTS+=( "fips" ) ;;
+
+		# TODO: Process other variants?
+
+		* ) INVALID+=( "${VARIANT}" ) ;;
+	esac
+done < <(echo "${VARIANT_LIST}" | csv_to_list)
 
 #
-# See if this container build cares whether there's FIPS
-# anywhere or not ...
+# If there are no invalids, this returns cleanly, otherwise it fails the build
 #
-grep -qE "^ARG\s+FIPS(=.*)?\s*$" "${GITHUB_WORKSPACE}/Dockerfile" && CANDIDATE_VARIANTS+=( "fips" )
-
-# TODO: Compute other variants? Maybe generalize the process?
+invalid_variants "${INVALID[@]}"
 
 #
-# Make sure we have no duplicates
+# If there are no variants identified, we MUST include the "main" variant
 #
-readarray -t VARIANTS < <(
-	(
-		echo "main"
-		for V in "${CANDIDATE_VARIANTS[@],,}" ; do
-			# Quick trim
-			V="$(echo ${V})"
-			[ -n "${V}" ] || continue
-			[ "${V}" != "all" ] || continue
-			[[ "${V}" =~ ^[^[:space:]]+$ ]] || continue
-			echo "${V}"
-		done
-	) | sort -u | sed -e '/^\s*$/d'
-)
+[ ${#VARIANTS[@]} -gt 0 ] || VARIANTS+=( "${MINIMUM_VARIANT}" )
 
-# This should yield the required output
-echo "value=[${VARIANTS[@]@Q}]" | tr ' ' ',' | tr "'" '"' >> "${GITHUB_OUTPUT}"
-exit 0
+output_variants "${VARIANTS[@]}" >> "${GITHUB_OUTPUT}"

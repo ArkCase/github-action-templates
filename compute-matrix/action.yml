@@ -10,6 +10,10 @@ inputs:
     description: "The FOIA Portal version to use for construction (computed from the Dockerfile if not provided)"
     required: false
     type: string
+  variants:
+    description: "The list of variants to build for, separated by commas and/or spaces (supported variants: main, fips)"
+    required: false
+    type: string
 
 runs:
   using: composite
@@ -25,6 +29,8 @@ runs:
 
     - id: variants
       name: Compute any additional variants to be built
+      env:
+        PARAM_VARIANTS: ${{ inputs.variants }}
       shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/compute-variants.sh"

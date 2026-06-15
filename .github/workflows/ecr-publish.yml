@@ -12,6 +12,11 @@ on:
         required: false
         type: string
 
+      variants:
+        description: "The list of variants to build for, separated by commas and/or spaces (supported variants: main, fips)"
+        required: false
+        type: string
+
       reports-bucket:
         description: "The bucket into which to upload the STIG Compliance and Vulnerability reports (defaults to 'arkcase-container-scan-results')"
         required: false
@@ -151,6 +156,7 @@ jobs:
         with:
           revision: ${{ inputs.revision }}
           portal: ${{ inputs.portal }}
+          variants: ${{ inputs.variants }}
 
     outputs:
       revisions: ${{ steps.compute-matrix.outputs.revisions }}
