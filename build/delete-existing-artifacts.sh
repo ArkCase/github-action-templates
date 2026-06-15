@@ -49,6 +49,7 @@ delete_artifact()
 {
 	local ARTIFACT_ID="${1}"
 	is_local_dev && ok "Fake-deleted the artifact with ID [${ARTIFACT_ID}]" && return 0
+	warn "Actually deleting the artifact [${ARTIFACT_ID}] ..."
 	run_gh "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}" "DELETE"
 }
 
