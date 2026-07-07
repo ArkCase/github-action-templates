@@ -1,7 +1,7 @@
 #!/bin/bash
 . "${GITHUB_ACTION_PATH}/common.sh"
 
-to_env TIMESTAMP="$(date -u +%Y%m%d%H%M%S)"
+to_env TIMESTAMP="$(date -u "+%Y%m%d-%H%M%SZ")"
 
 # If we're not given an explicit revision, and the
 # matrix revision is NOT the value "*", then this means
