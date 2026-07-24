@@ -1,6 +1,9 @@
 #!/bin/bash
 . "${GITHUB_ACTION_PATH}/common.sh"
 
+# If the Ubuntu Pro stuff isn't installed, don't bother checking
+type -P pro &>/dev/null || exit 1
+
 STATUS="$(sudo pro status --format json 2>&1)" || fail "Failed to query the Ubuntu Pro status (rc=${?}): ${STATUS}"
 
 ATTACHED="$(echo -n "${STATUS}" | jq -r .attached 2>&1)" || fail "Failed to parse the 'attached' result from the given status:\n${STATUS}"
