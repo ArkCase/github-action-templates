@@ -164,6 +164,15 @@ runs:
       run: |
         "${GITHUB_ACTION_PATH}/detect-local.sh"
 
+    - id: ubuntu-pro-enable
+      name: Enable Ubuntu Pro Features
+      env:
+        UBUNTU_PRO_TOKEN: ${{ inputs.ubuntu-pro-token }}
+      if: ${{ env.UBUNTU_PRO_TOKEN != '' }}
+      shell: bash
+      run: |
+        "${GITHUB_ACTION_PATH}/enable-ubuntu-pro.sh" "${UBUNTU_PRO_TOKEN}"
+
     - id: initialize
       name: Initialize the Environment
       env:
@@ -279,7 +288,6 @@ runs:
         MVN_GET_ENCRYPTION_KEY: ${{ inputs.mvn-get-encryption-key }}
         MVN_GET_USERNAME: ${{ inputs.mvn-get-username }}
         MVN_GET_PASSWORD: ${{ inputs.mvn-get-password }}
-        UBUNTU_PRO_TOKEN: ${{ inputs.ubuntu-pro-token }}
         SCAN_COMP: ${{ inputs.compliance-scan }}
         SCAN_VULN: ${{ inputs.vulnerabilities-scan }}
       shell: bash

@@ -1,6 +1,12 @@
 #!/bin/bash
 . "${GITHUB_ACTION_PATH}/common.sh"
 
+cleanup_ubuntu_pro()
+{
+	# Execute these steps upon exit
+	"${GITHUB_ACTION_PATH}/disable-ubuntu-pro.sh"
+}
+
 WORK_DIR="$(readlink -f "${GITHUB_WORKSPACE:-.}")"
 
 # Set any build arguments with private values
@@ -42,15 +48,17 @@ mkdir -p "${SECRETS_DIR}"
 # Next, add all the stuff S3 will need to pull crap
 AWS_PROFILE="armedia-docker-build"
 AWS_CONF="${SECRETS_DIR}/aws_conf"
+BUILD_ARGS+=(--secret id=aws_conf,src="${AWS_CONF}")
 (
 	cat <<-EOF
 	[profile ${AWS_PROFILE}]
 	region=${ECR_AWS_REGION}
 	EOF
 ) > "${AWS_CONF}"
-BUILD_ARGS+=(--secret id=aws_conf,src="${AWS_CONF}")
+sha256sum "${AWS_CONF}"
 
 AWS_AUTH="${SECRETS_DIR}/aws_auth"
+BUILD_ARGS+=(--secret id=aws_auth,src="${AWS_AUTH}")
 (
 	cat <<-EOF
 	[${AWS_PROFILE}]
@@ -58,30 +66,67 @@ AWS_AUTH="${SECRETS_DIR}/aws_auth"
 	aws_secret_access_key=${ECR_AWS_SECRET_ACCESS_KEY}
 	EOF
 ) > "${AWS_AUTH}"
-BUILD_ARGS+=(--secret id=aws_auth,src="${AWS_AUTH}")
+sha256sum "${AWS_AUTH}"
 
 # Add the Curl authentication deetz
 CURL_SECRETS="${SECRETS_DIR}/curl"
+BUILD_ARGS+=(--secret id=curl_auth,src="${CURL_SECRETS}")
 for VAR in "${!CURL_@}" ; do
 	echo "export ${VAR}=${!VAR@Q}"
 done | sort > "${CURL_SECRETS}"
-BUILD_ARGS+=(--secret id=curl_auth,src="${CURL_SECRETS}")
 sha256sum "${CURL_SECRETS}"
 
 # Add the Maven authentication deetz
 MVN_GET_SECRETS="${SECRETS_DIR}/mvn-get"
+BUILD_ARGS+=(--secret id=mvn_get_auth,src="${MVN_GET_SECRETS}")
 for VAR in "${!MVN_GET_@}" ; do
 	echo "export ${VAR}=${!VAR@Q}"
 done | sort > "${MVN_GET_SECRETS}"
-BUILD_ARGS+=(--secret id=mvn_get_auth,src="${MVN_GET_SECRETS}")
 sha256sum "${MVN_GET_SECRETS}"
 
-# Add the Ubuntu Pro authentication deetz
 UBUNTU_PRO_SECRETS="${SECRETS_DIR}/ubuntu-pro"
-for VAR in "${!UBUNTU_PRO_@}" ; do
-	echo "export ${VAR}=${!VAR@Q}"
-done | sort > "${UBUNTU_PRO_SECRETS}"
 BUILD_ARGS+=(--secret id=ubuntu_pro_auth,src="${UBUNTU_PRO_SECRETS}")
+if "${GITHUB_ACTION_PATH}/is-ubuntu-pro-active.sh" ; then
+	trap cleanup_ubuntu_pro EXIT
+	# Get a fresh build token!
+	JSON="$(sudo pro api u.pro.attach.guest.get_guest_token.v1)" || fail "Failed to get the Ubuntu Pro Guest Token (rc=${?})"
+	RESULT="$(jq -r ".result" <<< "${JSON}" 2>&1)" || fail "The JSON reply could not be parsed (rc=${?}): ${RESULT}\n\nJSON: ${JSON}"
+	case "${RESULT}" in
+		success ) ;;
+
+		* )
+			ERRORS="$(jq -r ".errors[]" <<< "${JSON}")"
+			err "API result = [${RESULT}]"
+			[ -n "${ERRORS}" ] && err "Errors:\n${ERRORS}"
+			fail "Failed to get the Ubuntu Pro Guest Token"
+			;;
+	esac
+
+	TOKEN="$(jq -r ".data.attributes.guest_token" <<< "${JSON}")"
+	[ -n "${TOKEN}" ] && ok "Guest token ready!" || fail "No guest token was generated!"
+
+	WARNINGS="$(jq -r ".warnings[]" <<< "${JSON}")"
+	[ -n "${WARNINGS}" ] && warn "Warnings:\n${WARNINGS}"
+
+	EXPIRATION="$(jq -r ".data.attributes.expires" <<< "${JSON}")"
+	[ -n "${EXPIRATION}" ] && eyes "Token expiration date: ${EXPIRATION}" || warn "No expiration date given for the token"
+
+	ID="$(jq -r ".data.attributes.id" <<< "${JSON}")"
+	[ -n "${ID}" ] && doing "Token ID: [${ID}]" || warn "No ID given for the token"
+
+	(
+		# We override the provided token with our own
+		export UBUNTU_PRO_TOKEN="${TOKEN}"
+		for VAR in "${!UBUNTU_PRO_@}" ; do
+			echo "export ${VAR}=${!VAR@Q}"
+		done
+	) | sort > "${UBUNTU_PRO_SECRETS}"
+
+	BUILD_ARGS+=(--label "UBUNTU_PRO=true")
+else
+	# No Ubuntu Pro? No problem! Use an empty file...
+	:> "${UBUNTU_PRO_SECRETS}"
+fi
 sha256sum "${UBUNTU_PRO_SECRETS}"
 
 # Final details for more complete information
