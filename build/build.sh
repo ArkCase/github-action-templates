@@ -129,6 +129,11 @@ else
 fi
 sha256sum "${UBUNTU_PRO_SECRETS}"
 
+[ -n "${FIPS}" ] \
+	&& FIPS_LABEL="true" \
+	|| FIPS_LABEL="false"
+BUILD_ARGS+=(--label "FIPS=${FIPS_LABEL}")
+
 # Final details for more complete information
 BUILD_ARGS+=(--label "GIT_REPOSITORY=${GITHUB_REPOSITORY}")
 BUILD_ARGS+=(--label "GIT_REF=${GITHUB_REF_NAME}")

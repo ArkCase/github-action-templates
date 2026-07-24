@@ -43,13 +43,15 @@ export FIPS=""
 #
 # The fips-enabled stuff is kept private
 #
+export UBUNTU_PRO_REQUIRED="false"
 if [ "${VARIANT}" == "fips" ] ; then
 	FIPS="-fips"
 	PRIVATE="true"
+	UBUNTU_PRO_REQUIRED="true"
 fi
 "${PRIVATE}" || VISIBILITY="public"
 
-to_env VISIBILITY FIPS
+to_env VISIBILITY FIPS UBUNTU_PRO_REQUIRED
 
 #
 # Split into an array of parts, making sure that double slashes, if present, are condensed into one

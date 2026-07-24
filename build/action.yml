@@ -164,15 +164,6 @@ runs:
       run: |
         "${GITHUB_ACTION_PATH}/detect-local.sh"
 
-    - id: ubuntu-pro-enable
-      name: Enable Ubuntu Pro Features
-      env:
-        UBUNTU_PRO_TOKEN: ${{ inputs.ubuntu-pro-token }}
-      if: ${{ env.UBUNTU_PRO_TOKEN != '' }}
-      shell: bash
-      run: |
-        "${GITHUB_ACTION_PATH}/enable-ubuntu-pro.sh" "${UBUNTU_PRO_TOKEN}"
-
     - id: initialize
       name: Initialize the Environment
       env:
@@ -276,6 +267,15 @@ runs:
       if: ${{ env.MAXIMIZE_BUILD_SPACE == 'true' }}
       shell: bash
       run: df -kh
+
+    - id: ubuntu-pro-enable
+      name: Enable Ubuntu Pro Features
+      env:
+        UBUNTU_PRO_TOKEN: ${{ inputs.ubuntu-pro-token }}
+      if: ${{ (env.UBUNTU_PRO_TOKEN != '') && (env.UBUNTU_PRO_REQUIRED == 'true') }}
+      shell: bash
+      run: |
+        "${GITHUB_ACTION_PATH}/enable-ubuntu-pro.sh" "${UBUNTU_PRO_TOKEN}"
 
     - name: Build the Docker image
       env:
