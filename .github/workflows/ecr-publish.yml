@@ -66,6 +66,12 @@ on:
         type: number
         default: 30
 
+      large-runner:
+        description: "Whether or not to use a larger runner (default false)"
+        required: false
+        type: boolean
+        default: false
+
     secrets:
       #
       # For AWS/S3 access
@@ -151,17 +157,19 @@ jobs:
         with:
           revision: ${{ inputs.revision }}
           portal: ${{ inputs.portal }}
+          large-runner: ${{ inputs.large-runner }}
 
     outputs:
       revisions: ${{ steps.compute-matrix.outputs.revisions }}
       variants: ${{ steps.compute-matrix.outputs.variants }}
+      runner-tags: ${{ steps.compute-matrix.outputs.runner-tags }}
 
   #
   # Once we've figured out which builds we need to run, we run them!
   #
   Build-and-Publish:
     needs: [ "Compute-Revisions" ]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04${{ fromJSON(needs.Compute-Revisions.outputs.runner-tags)[0] }}
 
     strategy:
       max-parallel: 3

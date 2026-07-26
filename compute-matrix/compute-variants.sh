@@ -30,8 +30,8 @@ if [ -n "${VARIANTS_OVERRIDE:-}" ] ; then
 
 	# Spit out the specific list of variants the user
 	# wants to build, with no additional considerations
-	echo "value=[${VARIANTS[@]@Q}]" | tr ' ' ',' | tr "'" '"' >> "${GITHUB_OUTPUT}"
-	exit 0
+	echo "value=$(jq -cn '$ARGS.positional' --args "${VARIANTS[@]}")" >> "${GITHUB_OUTPUT}"
+	exit ${?}
 fi
 
 #
@@ -65,5 +65,5 @@ readarray -t VARIANTS < <(
 )
 
 # This should yield the required output
-echo "value=[${VARIANTS[@]@Q}]" | tr ' ' ',' | tr "'" '"' >> "${GITHUB_OUTPUT}"
-exit 0
+echo "value=$(jq -cn '$ARGS.positional' --args "${VARIANTS[@]}")" >> "${GITHUB_OUTPUT}"
+exit ${?}

@@ -10,6 +10,11 @@ inputs:
     description: "The FOIA Portal version to use for construction (computed from the Dockerfile if not provided)"
     required: false
     type: string
+  large-runner:
+    description: "Whether or not to use a large runner for the work"
+    required: false
+    type: boolean
+    default: false
 
 runs:
   using: composite
@@ -29,6 +34,14 @@ runs:
       run: |
         "${GITHUB_ACTION_PATH}/compute-variants.sh"
 
+    - id: runner-tags
+      name: Compute the runner's tags
+      env:
+        PARAM_LARGE_RUNNER: ${{ inputs.large-runner }}
+      shell: bash
+      run: |
+        "${GITHUB_ACTION_PATH}/compute-runner-tags.sh"
+
 outputs:
   revisions:
     description: "The different revision numbers to build for the container (* == only the requested one)"
@@ -36,3 +49,6 @@ outputs:
   variants:
     description: "The different variants to build for the container ('main' == only the primary variant)"
     value: ${{ steps.variants.outputs.value }}
+  runner-tags:
+    description: "The runner tags to append to the runner name (may be an empty string, but MUST start with a '-')"
+    value: ${{ steps.runner-tags.outputs.value }}
