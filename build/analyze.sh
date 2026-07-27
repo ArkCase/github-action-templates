@@ -32,24 +32,27 @@ export RE_FULL_REVISION="^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA
 # Check to see the project's visibility
 #
 # TODO: CHECK THE DOCKERFILE FOR A REQUEST (ARG) TO KEEP THE BUILD PRIVATE?
+
+# By default, if we can't figure out if it's a private repo, assume it is for safety
 PRIVATE="$(gh repo view --json isPrivate --jq .isPrivate)" || PRIVATE="true"
-case "${PRIVATE,,}" in
-	false | true ) PRIVATE="${PRIVATE,,}" ;;
-	* ) PRIVATE="false" ;;
-esac
-export VISIBILITY="private"
-export FIPS=""
+[ "${PRIVATE,,}" == "false" ] \
+	&& PUBLIC="true" \
+	|| PUBLIC="false"
 
 #
 # The fips-enabled stuff is kept private
 #
+export FIPS=""
 export UBUNTU_PRO_REQUIRED="false"
 if [ "${VARIANT}" == "fips" ] ; then
 	FIPS="-fips"
-	PRIVATE="true"
+	PUBLIC="false"
 	UBUNTU_PRO_REQUIRED="true"
 fi
-"${PRIVATE}" || VISIBILITY="public"
+
+# Compute the final visibility
+export VISIBILITY="private"
+[ "${PUBLIC}" == "true" ] && VISIBILITY="public"
 
 to_env VISIBILITY FIPS UBUNTU_PRO_REQUIRED
 
