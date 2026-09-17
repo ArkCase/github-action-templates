@@ -155,6 +155,28 @@ inputs:
     required: false
     type: number
 
+outputs:
+  authoritative_tag:
+    description: "The authoritative tag with which the built image can be retrieved"
+  private_registry:
+    description: "The private registry onto which the built image was pushed"
+  public_registry:
+    description: "The public registry onto which the built image was pushed (will be the same as the private registry for private images)"
+  image_uri:
+    description: "The URI (without registry or version tag) for the built image"
+  image_tag:
+    description: "The exact tag used to push the built image, with all prefixes and suffixes"
+  image_digest:
+    description: "The exact digest for the built image"
+  revision_prefix:
+    description: "Any prefix present in the 'image_tag'"
+  revision:
+    description: "The base revision number, without any prefixes, suffixes, or extra data"
+  revision_prerelease:
+    description: "The prerelease information from the computed revision"
+  revision_metadata:
+    description: "The metadata information from the computed revision"
+
 runs:
   using: composite
   steps:
@@ -417,3 +439,22 @@ runs:
       shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/push-git-tags.sh"
+
+    - name: Prepare any releasable artifacts
+      shell: bash
+      run: |
+        "${GITHUB_ACTION_PATH}/prepare-releasable-artifacts.sh"
+
+    - name: Create Release and Upload Artifact
+      uses: softprops/action-gh-release@v2
+      if: ${{ env.ARTIFACTS_PATH != '' }}
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      with:
+        files: |
+          artifacts/*
+
+    - name: Produce the outputs
+      shell: bash
+      run: |
+        "${GITHUB_ACTION_PATH}/produce-outputs.sh"

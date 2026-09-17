@@ -406,6 +406,21 @@ to_env BUILDS="$(echo -n "${BUILDS[@]}" | tr ' ' ',')"
 # We do it like this to avoid having to modify the "docker push"
 # section, below.
 to_env AUTHORITATIVE_TAG="${PRIVATE_REGISTRY}/${IMAGE_URI}:${EXACT_REVISION}"
+to_env EXACT_REVISION
+
+#
+# If a persistent cache volume has been configured for this build,
+# we use it during the build. Otherwise, we add nothing
+#
+[ -v PERSISTENT_CACHE ] || PERSISTENT_CACHE="false"
+case "${PERSISTENT_CACHE,,}" in
+	true )
+		# This should let us re-use the build cache for subsequent
+		# builds for the same revision
+		CACHE_URI="build-cache/${IMAGE_URI}:${REVISION_PREFIX}${REVISION}"
+		BUILD_ARGS=( --cache-from "type=registry,ref=${CACHE_URI}" --cache-to "type=registry,ref=${CACHE_URI},mode=max" "${BUILD_ARGS[@]}" )
+		;;
+esac
 
 RC=0
 (

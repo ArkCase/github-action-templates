@@ -133,6 +133,38 @@ on:
       UBUNTU_PRO_TOKEN:
         required: false
 
+    outputs:
+      authoritative_tag:
+        description: "The authoritative tag with which the built image can be retrieved"
+        value: ${{ jobs.Build-And-Publish.outputs.authoritative_tag }}
+      private_registry:
+        description: "The private registry onto which the built image was pushed"
+        value: ${{ jobs.Build-And-Publish.outputs.private_registry }}
+      public_registry:
+        description: "The public registry onto which the built image was pushed (will be the same as the private registry for private images)"
+        value: ${{ jobs.Build-And-Publish.outputs.public_registry }}
+      image_uri:
+        description: "The URI (without registry or version tag) for the built image"
+        value: ${{ jobs.Build-And-Publish.outputs.image_uri }}
+      image_tag:
+        description: "The exact tag used to push the built image, with all prefixes and suffixes"
+        value: ${{ jobs.Build-And-Publish.outputs.image_tag }}
+      image_digest:
+        description: "The exact digest for the built image"
+        value: ${{ jobs.Build-And-Publish.outputs.image_digest }}
+      revision_prefix:
+        description: "Any prefix present in the 'image_tag'"
+        value: ${{ jobs.Build-And-Publish.outputs.revision_prefix }}
+      revision:
+        description: "The base revision number, without any prefixes, suffixes, or extra data"
+        value: ${{ jobs.Build-And-Publish.outputs.revision }}
+      revision_prerelease:
+        description: "The prerelease information from the computed revision"
+        value: ${{ jobs.Build-And-Publish.outputs.revision_prerelease }}
+      revision_metadata:
+        description: "The metadata information from the computed revision"
+        value: ${{ jobs.Build-And-Publish.outputs.revision_metadata }}
+
 env:
   GH_TOKEN: ${{ github.token }}
 
@@ -178,13 +210,26 @@ jobs:
         revision: ${{ fromJSON(needs.Compute-Revisions.outputs.revisions) }}
         variant: ${{ fromJSON(needs.Compute-Revisions.outputs.variants) }}
 
+    outputs:
+      authoritative_tag: ${{ steps.build_image.outputs.authoritative_tag }}
+      private_registry: ${{ steps.build_image.outputs.private_registry }}
+      public_registry: ${{ steps.build_image.outputs.public_registry }}
+      image_uri: ${{ steps.build_image.outputs.image_uri }}
+      image_tag: ${{ steps.build_image.outputs.image_tag }}
+      revision_prefix: ${{ steps.build_image.outputs.revision_prefix }}
+      revision: ${{ steps.build_image.outputs.revision }}
+      revision_prerelease: ${{ steps.build_image.outputs.revision_prerelease }}
+      revision_metadata: ${{ steps.build_image.outputs.revision_metadata }}
+
     steps:
       # This is inefficient, but necessary b/c we may not share
       # the worker with the matrix computation actions, above
       - name: Checkout source code
+        id: checkout_source
         uses: actions/checkout@v6
 
       - name: Build the Container Image
+        id: build_image
         uses: arkcase/github-action-templates/build@main
         with:
           # General build parameters
