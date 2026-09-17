@@ -7,6 +7,13 @@ cleanup_ubuntu_pro()
 	"${GITHUB_ACTION_PATH}/disable-ubuntu-pro.sh"
 }
 
+if [ ! -v UBUNTU_PRO_ACTIVE ] ; then
+	"${GITHUB_ACTION_PATH}/is-ubuntu-pro-active.sh" \
+		&& UBUNTU_PRO_ACTIVE="true" \
+		|| UBUNTU_PRO_ACTIVE="false"
+fi
+[ "${UBUNTU_PRO_ACTIVE}" == "true" ] && trap cleanup_ubuntu_pro EXIT
+
 WORK_DIR="$(readlink -f "${GITHUB_WORKSPACE:-.}")"
 
 # Set any build arguments with private values
@@ -86,8 +93,7 @@ sha256sum "${MVN_GET_SECRETS}"
 
 UBUNTU_PRO_SECRETS="${SECRETS_DIR}/ubuntu-pro"
 BUILD_ARGS+=(--secret id=ubuntu_pro_auth,src="${UBUNTU_PRO_SECRETS}")
-if "${GITHUB_ACTION_PATH}/is-ubuntu-pro-active.sh" ; then
-	trap cleanup_ubuntu_pro EXIT
+if [ "${UBUNTU_PRO_ACTIVE}" == "true" ] ; then
 	# Get a fresh build token!
 	JSON="$(sudo pro api u.pro.attach.guest.get_guest_token.v1)" || fail "Failed to get the Ubuntu Pro Guest Token (rc=${?})"
 	RESULT="$(jq -r ".result" <<< "${JSON}" 2>&1)" || fail "The JSON reply could not be parsed (rc=${?}): ${RESULT}\n\nJSON: ${JSON}"

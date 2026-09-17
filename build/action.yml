@@ -290,8 +290,7 @@ runs:
       shell: bash
       run: df -kh
 
-    - id: ubuntu-pro-enable
-      name: Enable Ubuntu Pro Features
+    - name: Enable Ubuntu Pro Features
       env:
         UBUNTU_PRO_TOKEN: ${{ inputs.ubuntu-pro-token }}
       if: ${{ (env.UBUNTU_PRO_TOKEN != '') && (env.UBUNTU_PRO_REQUIRED == 'true') }}
