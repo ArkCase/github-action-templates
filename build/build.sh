@@ -1,18 +1,11 @@
 #!/bin/bash
 . "${GITHUB_ACTION_PATH}/common.sh"
 
-cleanup_ubuntu_pro()
-{
-	# Execute these steps upon exit
-	"${GITHUB_ACTION_PATH}/disable-ubuntu-pro.sh"
-}
-
 if [ ! -v UBUNTU_PRO_ACTIVE ] ; then
 	"${GITHUB_ACTION_PATH}/is-ubuntu-pro-active.sh" \
 		&& UBUNTU_PRO_ACTIVE="true" \
 		|| UBUNTU_PRO_ACTIVE="false"
 fi
-[ "${UBUNTU_PRO_ACTIVE}" == "true" ] && trap cleanup_ubuntu_pro EXIT
 
 WORK_DIR="$(readlink -f "${GITHUB_WORKSPACE:-.}")"
 
