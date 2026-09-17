@@ -1,0 +1,18 @@
+name: "Ubuntu Pro Attach"
+description: "Attach a GitHub runner to Ubuntu Pro"
+author: "diego.rivera@armedia.com"
+
+inputs:
+  ubuntu-pro-token:
+    description: "The token to use when attaching to Ubuntu Pro"
+    required: true
+
+runs:
+  using: "node20"
+  main: "dist/main/index.js"
+  post: "dist/cleanup/index.js"
+  post-if: success()
+
+branding:
+  icon: "terminal"
+  color: "blue"
