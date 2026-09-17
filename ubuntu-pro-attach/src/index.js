@@ -41,7 +41,7 @@ async function run()
 
 		// Success!
 		ubuntuProEnabled = "true";
-		core.setOuptut("attached", ubuntuProEnabled);
+		core.setOutput("attached", ubuntuProEnabled);
 	}
 	catch (error)
 	{
@@ -51,6 +51,7 @@ async function run()
 	{
 		// To be read in the cleanup
 		core.saveState("ubuntuProEnabled", ubuntuProEnabled);
+		core.exportVariable("UBUNTU_PRO_ACTIVE", ubuntuProEnabled);
 	}
 }
 
