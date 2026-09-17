@@ -185,7 +185,7 @@ jobs:
 
       - id: compute-matrix
         name: Compute alternate revisions and variants to be built
-        uses: arkcase/github-action-templates/compute-matrix@develop
+        uses: arkcase/github-action-templates/compute-matrix@main
         with:
           revision: ${{ inputs.revision }}
           portal: ${{ inputs.portal }}
@@ -230,7 +230,7 @@ jobs:
 
       - name: Build the Container Image
         id: build_image
-        uses: arkcase/github-action-templates/build@develop
+        uses: arkcase/github-action-templates/build@main
         with:
           # General build parameters
           matrix-revision: ${{ matrix.revision }}

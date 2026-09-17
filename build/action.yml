@@ -292,7 +292,7 @@ runs:
 
     - name: Enable Ubuntu Pro Features (only if necessary)
       if: ${{ (inputs.ubuntu-pro-token != '') && (env.UBUNTU_PRO_REQUIRED == 'true') }}
-      uses: arkcase/github-action-templates/ubuntu-pro-attach@develop
+      uses: arkcase/github-action-templates/ubuntu-pro-attach@main
       with:
         ubuntu-pro-token: ${{ inputs.ubuntu-pro-token }}
 
