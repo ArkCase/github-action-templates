@@ -169,7 +169,7 @@ REVISION_METADATA="${BASH_REMATCH[8]}"
 #
 REVISION_SNAPSHOT="false"
 if [[ "${REVISION_PRERELEASE}" =~ SNAPSHOT ]] ; then
-	[[ "${REVISION_PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT ]] || fail "Illegal use of the word 'SNAPSHOT' as [${REVISION_PRERELEASE}] - must be the last word: [${REVISION}]"
+	[[ "${REVISION_PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT$ ]] || fail "Illegal use of the word 'SNAPSHOT' as [${REVISION_PRERELEASE}] - must be the last word: [${REVISION}]"
 	REVISION_SNAPSHOT="true"
 fi
 
@@ -186,7 +186,7 @@ if [ -n "${PORTAL_VER}" ] ; then
 	# If the pre-release info is a "SNAPSHOT", make sure it's used properly
 	PORTAL_SNAPSHOT="false"
 	if [[ "${PORTAL_PRERELEASE}" =~ SNAPSHOT ]] ; then
-		[[ "${PORTAL_PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT ]] || fail "Illegal use of the word 'SNAPSHOT' as [${PORTAL_PRERELEASE}] - must be the last word: [${PORTAL_VER}]"
+		[[ "${PORTAL_PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT$ ]] || fail "Illegal use of the word 'SNAPSHOT' as [${PORTAL_PRERELEASE}] - must be the last word: [${PORTAL_VER}]"
 		PORTAL_SNAPSHOT="true"
 	fi
 
