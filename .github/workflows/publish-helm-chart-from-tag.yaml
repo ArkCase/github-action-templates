@@ -1,16 +1,6 @@
 #
-# The expected tag format is: ${CHART_NAME}/${TYPE}/${VERSION}
-#
-# ${CHART_NAME} == the chart name (no slashes!!) will be taken as relative to the ${chart-dir} directory!
-#             If ${chart-dir} is blank or not specified, it will be defaulted to ".". The ${chart-dir}
-#             directory in turn must be relative to the root of the checkout. The final chart packaged will be
-#             expected to be packaged as "${public-dir}/${CHART_NAME}-${VERSION}.tgz", relative to the root
-#             of the target repository checkout. If chart-dir or public-dir are not specified, or are empty,
-#             they will be defaulted to ".".
-#
-# ${RELEASE_TYPE}" == the type of release: a "release" (i.e. final version of a chart) or a "test" (i.e. a pre-release chart)
-#
-# ${VERSION} == the version of the chart to release. It must match the final packaged version of the chart
+# See publish-helm-chart/action.yml for the expected tag format, and the
+# details on how the chart is packaged and published
 #
 
 name: Publish a Helm Chart based on tags
@@ -53,191 +43,17 @@ on:
       RELEASE_WORKFLOW_PAT:
         required: true
 
-env:
-
-  # So we can easily identify what's what and not mix things up
-  SRC_REPO_DIR: "sources"
-  TGT_REPO_DIR: "pages"
-
-  # We define this here just so we can keep all our step definitions
-  # consistent with the check for its value
-  EXIT: "false"
-
-  # Initial state
-  DELETE_TAG: "true"
-
 jobs:
   publish-helm-chart:
     runs-on: ubuntu-24.04
     steps:
-      # This one needs to happen ALWAYS, b/c if tag validation
-      # fails, the last job will remove the errant tag from the
-      # repository to keep things clean.
-      - name: Checkout the chart sources
-        if: ${{ env.EXIT == 'false' }}
-        uses: actions/checkout@v6
+      - name: Publish the Helm chart
+        uses: arkcase/github-action-templates/publish-helm-chart@main
         with:
+          chart-dir: ${{ inputs.chart-dir }}
+          public-dir: ${{ inputs.public-dir }}
+          doc-dir: ${{ inputs.doc-dir }}
+          helm-repo-url: ${{ inputs.helm-repo-url }}
+          publisher-name: ${{ inputs.publisher-name }}
+          publisher-email: ${{ inputs.publisher-email }}
           token: ${{ secrets.RELEASE_WORKFLOW_PAT }}
-          path: ${{ env.SRC_REPO_DIR }}
-
-      - name: Validate the execution
-        if: ${{ env.EXIT == 'false' }}
-        env:
-          CHART_DIR: ${{ inputs.chart-dir }}
-          PUBLIC_DIR: ${{ inputs.public-dir }}
-        run: |
-          set -euo pipefail
-          if [[ ! "${GITHUB_REF}" =~ ^refs/tags/(([^/]+)/([^/]+)/([^/]+))$ ]] ; then
-              echo "This ref type is not supported for triggering a Chart publication: ${GITHUB_REF}"
-              echo "EXIT=true" >> "${GITHUB_ENV}"
-              exit 0
-          fi
-
-          # The name of the chart (relative to the src/ directory, no "/" allowed in the name)
-          CHART_NAME="${BASH_REMATCH[2]}"
-
-          # The type of release: test/release
-          RELEASE_TYPE="${BASH_REMATCH[3]}"
-
-          # The version being released
-          VERSION="${BASH_REMATCH[4]}"
-
-          VERSION_RE='^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)([.](0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?([+]([0-9a-zA-Z-]+([.][0-9a-zA-Z-]+)*))?$'
-          if [[ ! "${VERSION}" =~ ${VERSION_RE} ]] ; then
-              echo "Invalid version number [${VERSION}] - must match SemVer rules"
-              exit 1
-          fi
-
-          MAJOR="${BASH_REMATCH[1]}"
-          MINOR="${BASH_REMATCH[2]}"
-          PATCH="${BASH_REMATCH[3]}"
-          PRE_RELEASE="${BASH_REMATCH[5]}"
-          BUILD_METADATA="${BASH_REMATCH[10]}"
-
-          if [ -n "${PRE_RELEASE}" ] ; then
-              VERSION_TYPE="test"
-          else
-              VERSION_TYPE="release"
-          fi
-
-          if [ "${VERSION_TYPE}" != "${RELEASE_TYPE}" ] ; then
-              echo "The version number ${VERSION} may only be used for ${VERSION_TYPE} releases, not for ${RELEASE_TYPE} releases."
-              exit 1
-          fi
-
-          for VAR in CHART_DIR PUBLIC_DIR ; do
-              if [ -v "${VAR}" ] && [ -n "${!VAR}" ] ; then
-                  # Validate that the path doesn't have "." or ".." elements
-                  case "${!VAR}" in
-                      /* ) echo "The ${VAR} value may not be an absolute path" ; exit 1 ;;
-                      .. | ../* | */.. | */../* ) echo "The ${VAR} value may not contain '..' elements" ; exit 1 ;;
-                      * ) ;;
-                  esac
-              else
-                  declare -x "${VAR}=."
-              fi
-          done
-
-          # Everything looks good ... three more variables to compute
-          CHART_SRC_DIR="${SRC_REPO_DIR}/${CHART_DIR}"
-          CHART_TGT_DIR="${TGT_REPO_DIR}/${PUBLIC_DIR}"
-          CHART_TGT_FILE="${CHART_NAME}-${VERSION}.tgz"
-
-          # Export all the computed variables in their exact current values
-          echo "All parameters appear to be valid"
-          for VAR in CHART_NAME RELEASE_TYPE VERSION MAJOR MINOR PATCH PRE_RELEASE BUILD_METADATA CHART_SRC_DIR CHART_TGT_DIR CHART_TGT_FILE ; do
-              echo "${VAR}=${!VAR}" | tee -a "${GITHUB_ENV}"
-          done
-
-      - name: Checkout the GH Pages branch
-        if: ${{ env.EXIT == 'false' }}
-        uses: actions/checkout@v6
-        with:
-          token: ${{ secrets.RELEASE_WORKFLOW_PAT }}
-          path: ${{ env.TGT_REPO_DIR }}
-          ref: "gh-pages"
-
-      - name: Install Helm
-        if: ${{ env.EXIT == 'false' }}
-        uses: azure/setup-helm@v4.2.0
-
-      - name: Package the Chart
-        if: ${{ env.EXIT == 'false' }}
-        run: |
-          set -euo pipefail
-
-          if [ -e "${CHART_TGT_DIR}/${CHART_TGT_FILE}" ] ; then
-              echo "Version ${VERSION} of chart [${CHART_NAME}] has already been published. Overwrite is not allowed."
-              echo "DELETE_TAG=false" >> "${GITHUB_ENV}"
-              exit 1
-          fi
-
-          if ! OUT="$(helm package --destination "${CHART_TGT_DIR}" --dependency-update "${CHART_SRC_DIR}/${CHART_NAME}" 2>&1)" ; then
-              echo "Failed to package the chart: ${OUT}"
-              exit 1
-          fi
-
-          # Packaging complete, get the name of the file packaged
-          OUT_RE='^.*to: (.*[.]tgz)$'
-          if [[ ! "${OUT}" =~ ${OUT_RE} ]] ; then
-              echo "Unexpected output from 'helm package': ${OUT}"
-              exit 1
-          fi
-          PACKAGED_CHART="$(basename "${BASH_REMATCH[1]}")"
-
-          # The packaged chart should be in the file "${CHART_TGT_DIR}/${CHART_NAME}-${VERSION}.tgz"
-          CHART_FILE="${CHART_NAME}-${VERSION}.tgz"
-          if [ "${PACKAGED_CHART}" != "${CHART_FILE}" ] ; then
-              echo "The packaged chart's name (${PACKAGED_CHART}) did not match the expected name (${CHART_FILE})"
-              exit 1
-          fi
-
-      - name: Update the repository index
-        if: ${{ env.EXIT == 'false' }}
-        env:
-          HELM_REPO_URL: ${{ inputs.helm-repo-url }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          [ -n "${HELM_REPO_URL}" ] || HELM_REPO_URL="$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.html_url')"
-          helm repo index --url "${HELM_REPO_URL}" "${CHART_TGT_DIR}"
-
-      - name: Copy any documentation updates
-        if: ${{ (env.EXIT == 'false') && (env.RELEASE_TYPE == 'release') }}
-        env:
-          DOC_DIR: ${{ inputs.doc-dir }}
-        run: |
-          set -euo pipefail
-
-          # Add the documentation, if needed
-          DOC_SRC_DIR="${SRC_REPO_DIR}/${DOC_DIR}"
-          [ -d "${DOC_SRC_DIR}" ] || exit 0
-
-          echo "Copying the documentation"
-          ( cd "${DOC_SRC_DIR}" && tar -cf - . ) | tar -C "${TGT_REPO_DIR}" -xvf -
-
-      - name: Publish the chart & doc changes
-        if: ${{ env.EXIT == 'false' }}
-        env:
-          PUBLISHER_NAME: ${{ inputs.publisher-name }}
-          PUBLISHER_EMAIL: ${{ inputs.publisher-email }}
-        run: |
-          set -euo pipefail
-          [ -n "${PUBLISHER_EMAIL}" ] || PUBLISHER_NAME="${GITHUB_TRIGGERING_ACTOR}"
-          [ -n "${PUBLISHER_NAME}" ] || PUBLISHER_EMAIL="${GITHUB_TRIGGERING_ACTOR}[bot]@workflow.github.com"
-          cd "${TGT_REPO_DIR}"
-          git config --global user.name "${PUBLISHER_NAME}"
-          git config --global user.email "${PUBLISHER_EMAIL}"
-          git add .
-          git commit -m "Publishing ${CHART_NAME}-${VERSION}"
-          git push
-
-      - name: Cleaning up after a failed run
-        if: failure()
-        run: |
-          set -euo pipefail
-          if [ "${DELETE_TAG:-}" == "true" ] ; then
-              git -C "${SRC_REPO_DIR}" push --delete origin "${GITHUB_REF}"
-          else
-              echo "Tag deletion has been bypassed"
-          fi
