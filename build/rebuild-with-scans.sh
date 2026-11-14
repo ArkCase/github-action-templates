@@ -3,11 +3,13 @@
 
 cleanup()
 {
+	local RC="${?}"
 	doing "Cleaning up the scan results..."
 	rm -rf "${SCAN_TGT_DIR}" "${FILE_LIST}" &>/dev/null
 	[ -v DOCKERFILE ] && rm -f "${DOCKERFILE}" &>/dev/null
 	[ -v SECURITY_REPORTS_BUNDLE ] && rm -f "${SECURITY_REPORTS_BUNDLE}" &>/dev/null
 	[ -v BACKUP_TAG ] && docker image rm "${BACKUP_TAG}" &>/dev/null
+	return "${RC}"
 }
 trap cleanup EXIT
 

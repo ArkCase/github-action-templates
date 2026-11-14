@@ -7,7 +7,9 @@
 
 cleanup()
 {
+	local RC="${?}"
 	docker volume rm "${SCAN_VOL}" &>/dev/null
+	return "${RC}"
 }
 
 trap cleanup EXIT

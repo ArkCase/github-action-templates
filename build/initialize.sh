@@ -31,7 +31,9 @@ ARGS_TEMP="$(mktemp --tmpdir="${GITHUB_ACTION_PATH}" ".build-args-XXXXXX.tmp")"
 
 cleanup()
 {
+	local RC="${?}"
 	rm -rf "${ARGS_TEMP}" &>/dev/null
+	return "${RC}"
 }
 trap cleanup EXIT
 
