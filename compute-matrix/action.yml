@@ -4,7 +4,7 @@ description: Compute which extra versions and/or variants of the container need 
 inputs:
   revision:
     description: "The revision number to use for construction (computed from the Dockerfile if not provided)"
-    required: true
+    required: false
     type: string
   portal:
     description: "The FOIA Portal version to use for construction (computed from the Dockerfile if not provided)"

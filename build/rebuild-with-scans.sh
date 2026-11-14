@@ -6,9 +6,9 @@ cleanup()
 	local RC="${?}"
 	doing "Cleaning up the scan results..."
 	rm -rf "${SCAN_TGT_DIR}" "${FILE_LIST}" &>/dev/null
-	[ -v DOCKERFILE ] && rm -f "${DOCKERFILE}" &>/dev/null
+	[ -v REPORTS_DOCKERFILE ] && rm -f "${REPORTS_DOCKERFILE}" &>/dev/null
 	[ -v SECURITY_REPORTS_BUNDLE ] && rm -f "${SECURITY_REPORTS_BUNDLE}" &>/dev/null
-	[ -v BACKUP_TAG ] && docker image rm "${BACKUP_TAG}" &>/dev/null
+	[ -v BACKUP_TAG ] && docker image rm "${BACKUP_TAG}" &>/dev/null || true
 	return "${RC}"
 }
 trap cleanup EXIT
@@ -41,8 +41,8 @@ if [ $(wc -l < "${FILE_LIST}") -gt 0 ] ; then
 	#
 	# Create a new Dockerfile including the reports tarfile
 	#
-	DOCKERFILE="Dockerfile.with-reports.${SCAN_ID}"
-	cat <<-EOF > "${DOCKERFILE}"
+	REPORTS_DOCKERFILE="Dockerfile.with-reports.${SCAN_ID}"
+	cat <<-EOF > "${REPORTS_DOCKERFILE}"
 	FROM "${AUTHORITATIVE_TAG}"
 	COPY --chown=root:root --chmod=0444 "${SECURITY_REPORTS_BUNDLE}" "/security-reports.tar.gz"
 	EOF
@@ -61,7 +61,7 @@ if [ $(wc -l < "${FILE_LIST}") -gt 0 ] ; then
 	# No build args needed here b/c we don't need'em
 	#
 	RC=0
-	run docker build --file "${DOCKERFILE}" --tag "${AUTHORITATIVE_TAG}" "${EXTRA_TAGS[@]}" . || RC=${?}
+	run docker build --file "${REPORTS_DOCKERFILE}" --tag "${AUTHORITATIVE_TAG}" "${EXTRA_TAGS[@]}" . || RC=${?}
 	[ ${RC} -ne 0 ] && exit ${RC}
 else
 	warn "No scan results found, so no extra build was done"

@@ -30,8 +30,10 @@ if [ -n "${VARIANTS_OVERRIDE:-}" ] ; then
 
 	# Spit out the specific list of variants the user
 	# wants to build, with no additional considerations
-	echo "value=$(jq -cn '$ARGS.positional' --args "${VARIANTS[@]}")" >> "${GITHUB_OUTPUT}"
-	exit ${?}
+	if [ ${#VARIANTS[@]} -gt 0 ] ; then
+		echo "value=$(jq -cn '$ARGS.positional' --args "${VARIANTS[@]}")" >> "${GITHUB_OUTPUT}"
+		exit ${?}
+	fi
 fi
 
 #
