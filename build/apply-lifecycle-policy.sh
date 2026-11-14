@@ -18,10 +18,11 @@ for TYPE in "${TYPES[@]}" ; do
 
 	# Compute the default
 	DEF="DEFAULT_${VAR}"
-	[ -v "${DEF}" ] && [[ "${!DEF}" =~ ^(0|[1-9][0-9]*)$ ]] && DEF="${!DEF}" || DEF="${DEFAULT_KEEP_DAYS}"
+	[ -v "${DEF}" ] && [[ "${!DEF}" =~ ^[1-9][0-9]*$ ]] && DEF="${!DEF}" || DEF="${DEFAULT_KEEP_DAYS}"
 
 	# Validate the variable's value, and apply the default if invalid
-	[ -v "${VAR}" ] && [[ "${!VAR}" =~ ^(0|[1-9][0-9]*)$ ]] || declare -gx "${VAR}=${DEF}"
+	# (ECR requires a countNumber of at least 1)
+	[ -v "${VAR}" ] && [[ "${!VAR}" =~ ^[1-9][0-9]*$ ]] || declare -gx "${VAR}=${DEF}"
 
 	# Add the JQ arguments
 	JQ_ARGS+=( --argjson "${VAR}" "${!VAR}" )

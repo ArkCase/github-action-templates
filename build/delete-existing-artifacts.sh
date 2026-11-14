@@ -30,6 +30,12 @@ list_artifacts()
 		return ${RC}
 	fi
 
+	# An empty page means there are no more pages to read
+	# (return code 2 signals this to the caller)
+	local COUNT=""
+	COUNT="$(jq -r '.artifacts | length' <<< "${LIST}")" || return ${?}
+	[ "${COUNT}" -gt 0 ] || return 2
+
 	# We filter by branch, name prefix, and run id so we don't
 	# clobber artifacts being uploaded by this specific run, and
 	# only delete artifacts added by other, older runs
@@ -84,13 +90,15 @@ for TYPE in "${TYPES[@]}" ; do
 		(( ++PAGE ))
 		RC=0
 		LIST="$(list_artifacts "${NAME_PREFIX}" "${PAGE}" 2>&1)" || RC=${?}
+
+		# No more pages to read
+		[ ${RC} -eq 2 ] && break
+
 		if [ ${RC} -ne 0 ] ; then
 			# Temporary workaround for a dumb boo-boo on my part :)
-			err "Failed to list the ${NAME_PREFIX} artifacts (page ${PAGE}) (rc=${?}): ${LIST}"
+			err "Failed to list the ${NAME_PREFIX} artifacts (page ${PAGE}) (rc=${RC}): ${LIST}"
 			break
 		fi
-
-		[ -n "${LIST}" ] || break
 
 		while read LINE ; do
 			[ -n "${LINE}" ] || continue

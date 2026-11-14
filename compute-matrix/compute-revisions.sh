@@ -45,7 +45,7 @@ if [ -f "${SCRIPT}" ] ; then
 	RC=0
 	OUT="$( "${SCRIPT}" )" || RC=${?}
 	if [ ${RC} -ne 0 ] ; then
-		echo "ERROR: Failed to compute the alternate revisions using [${SCRIPT_NAME}] (rc=${?}): ${OUT}"
+		echo "ERROR: Failed to compute the alternate revisions using [${SCRIPT_NAME}] (rc=${RC}): ${OUT}"
 		exit ${RC}
 	fi
 	METHOD="${SCRIPT}"
@@ -62,7 +62,7 @@ elif [ -f "${FILE}" ] ; then
 	RC=0
 	OUT="$(<"${FILE}")" || RC=${?}
 	if [ ${RC} -ne 0 ] ; then
-		echo "ERROR: Failed to read the alternate revisions from [${FILE_NAME}] (rc=${?})"
+		echo "ERROR: Failed to read the alternate revisions from [${FILE_NAME}] (rc=${RC})"
 		exit ${RC}
 	fi
 	METHOD="${FILE}"
@@ -72,9 +72,10 @@ else
 fi
 
 REVISIONS=()
-# The output will be filtered to remove comments and blank lines. The
-# resulting list will be sorted using "version sort" order, ascending.
-[ -n "${METHOD}" ] && readarray -t REVISIONS < <(echo -ne "${OUT}" | sed -e 's;#.*$;;g' -e '/^\s*$/d' | sort -V -u)
+# The output will be filtered to remove comments, surrounding whitespace,
+# and blank lines. The resulting list will be sorted using "version sort"
+# order, ascending.
+[ -n "${METHOD}" ] && readarray -t REVISIONS < <(printf '%s\n' "${OUT}" | sed -e 's;#.*$;;g' -e 's;^\s\+;;' -e 's;\s\+$;;' -e '/^\s*$/d' | sort -V -u)
 
 # Did we find any revisions?
 if [ ${#REVISIONS[@]} -gt 0 ] ; then

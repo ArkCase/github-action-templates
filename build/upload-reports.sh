@@ -1,6 +1,9 @@
 #!/bin/bash
 . "${GITHUB_ACTION_PATH}/common.sh"
 
+# Apply the documented default bucket if none was given
+[ -n "${REPORTS_BUCKET:-}" ] || REPORTS_BUCKET="arkcase-container-scan-results"
+
 # Turn the command into a dud in development mode
 is_local_dev && MODE="running" || MODE=""
 

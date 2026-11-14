@@ -158,24 +158,34 @@ inputs:
 outputs:
   authoritative_tag:
     description: "The authoritative tag with which the built image can be retrieved"
+    value: ${{ steps.produce-outputs.outputs.authoritative_tag }}
   private_registry:
     description: "The private registry onto which the built image was pushed"
+    value: ${{ steps.produce-outputs.outputs.private_registry }}
   public_registry:
     description: "The public registry onto which the built image was pushed (will be the same as the private registry for private images)"
+    value: ${{ steps.produce-outputs.outputs.public_registry }}
   image_uri:
     description: "The URI (without registry or version tag) for the built image"
+    value: ${{ steps.produce-outputs.outputs.image_uri }}
   image_tag:
     description: "The exact tag used to push the built image, with all prefixes and suffixes"
+    value: ${{ steps.produce-outputs.outputs.image_tag }}
   image_digest:
     description: "The exact digest for the built image"
+    value: ${{ steps.produce-outputs.outputs.image_digest }}
   revision_prefix:
     description: "Any prefix present in the 'image_tag'"
+    value: ${{ steps.produce-outputs.outputs.revision_prefix }}
   revision:
     description: "The base revision number, without any prefixes, suffixes, or extra data"
+    value: ${{ steps.produce-outputs.outputs.revision }}
   revision_prerelease:
     description: "The prerelease information from the computed revision"
+    value: ${{ steps.produce-outputs.outputs.revision_prerelease }}
   revision_metadata:
     description: "The metadata information from the computed revision"
+    value: ${{ steps.produce-outputs.outputs.revision_metadata }}
 
 runs:
   using: composite
@@ -354,7 +364,7 @@ runs:
         retention-days: ${{ env.SCAN_REPORT_RETENTION_DAYS }}
 
     - name: Upload the STIG compliance report to the GitHub Security tab
-      if: ${{ (env.LOCAL_DEV != 'true') && (hashFiles(env.COMP_REPORT_XML_SOURCE) != '') }}
+      if: ${{ (env.LOCAL_DEV != 'true') && (hashFiles(env.COMP_REPORT_SARIF_SOURCE) != '') }}
       uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: ${{ env.COMP_REPORT_SARIF_SOURCE }}
@@ -451,7 +461,8 @@ runs:
         files: |
           artifacts/*
 
-    - name: Produce the outputs
+    - id: produce-outputs
+      name: Produce the outputs
       shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/produce-outputs.sh"

@@ -8,7 +8,7 @@
 cleanup()
 {
 	local RC="${?}"
-	docker volume rm "${SCAN_VOL}" &>/dev/null
+	docker volume rm "${SCAN_VOL}" &>/dev/null || true
 	return "${RC}"
 }
 
@@ -39,4 +39,4 @@ CMD=(
 # being kept for posterity.
 #
 
-exec "${GITHUB_ACTION_PATH}/delete-existing-artifacts.sh"
+"${GITHUB_ACTION_PATH}/delete-existing-artifacts.sh"

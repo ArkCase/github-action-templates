@@ -37,13 +37,30 @@ for VAR in "${!BUILD_ARG_@}" ; do
 		PUBLIC_REGISTRY | \
 		BASE_VER_PFX | \
 		VER | \
-		PORTAL_VER ) fail "The build argument ${ARG} cannot be overridden by .bulid-arg/*" ;;
+		PORTAL_VER ) fail "The build argument ${ARG} cannot be overridden by .build-args/*" ;;
 	esac
 	BUILD_ARGS+=(--build-arg "${ARG}=${!VAR}")
 done
 
-SECRETS_DIR="$(mktemp -d --tmpdir="${WORK_DIR}" ".secrets-XXXXXX.tmp")"
-mkdir -p "${SECRETS_DIR}"
+cleanup_secrets()
+{
+	[ -n "${SECRETS_DIR:-}" ] && [ -d "${SECRETS_DIR}" ] || return 0
+	find "${SECRETS_DIR}" -type f -exec shred -u "{}" ";" &>/dev/null || true
+	rm -rf "${SECRETS_DIR}" &>/dev/null || true
+	return 0
+}
+
+cleanup()
+{
+	local RC="${?}"
+	cleanup_secrets
+	return "${RC}"
+}
+trap cleanup EXIT
+
+# The secrets must NOT live inside the build context (the workspace), lest
+# they be sent to the Docker daemon and picked up by any "COPY . ..."
+SECRETS_DIR="$(mktemp -d --tmpdir="${RUNNER_TEMP:-/tmp}" ".secrets-XXXXXX.tmp")"
 
 # Next, add all the stuff S3 will need to pull crap
 AWS_PROFILE="armedia-docker-build"
@@ -94,23 +111,23 @@ if [ "${UBUNTU_PRO_ACTIVE}" == "true" ] ; then
 		success ) ;;
 
 		* )
-			ERRORS="$(jq -r ".errors[]" <<< "${JSON}")"
+			ERRORS="$(jq -r ".errors[]?" <<< "${JSON}")"
 			err "API result = [${RESULT}]"
 			[ -n "${ERRORS}" ] && err "Errors:\n${ERRORS}"
 			fail "Failed to get the Ubuntu Pro Guest Token"
 			;;
 	esac
 
-	TOKEN="$(jq -r ".data.attributes.guest_token" <<< "${JSON}")"
+	TOKEN="$(jq -r ".data.attributes.guest_token // empty" <<< "${JSON}")"
 	[ -n "${TOKEN}" ] && ok "Guest token ready!" || fail "No guest token was generated!"
 
-	WARNINGS="$(jq -r ".warnings[]" <<< "${JSON}")"
+	WARNINGS="$(jq -r ".warnings[]?" <<< "${JSON}")"
 	[ -n "${WARNINGS}" ] && warn "Warnings:\n${WARNINGS}"
 
-	EXPIRATION="$(jq -r ".data.attributes.expires" <<< "${JSON}")"
+	EXPIRATION="$(jq -r ".data.attributes.expires // empty" <<< "${JSON}")"
 	[ -n "${EXPIRATION}" ] && eyes "Token expiration date: ${EXPIRATION}" || warn "No expiration date given for the token"
 
-	ID="$(jq -r ".data.attributes.id" <<< "${JSON}")"
+	ID="$(jq -r ".data.attributes.id // empty" <<< "${JSON}")"
 	[ -n "${ID}" ] && doing "Token ID: [${ID}]" || warn "No ID given for the token"
 
 	(
@@ -243,6 +260,13 @@ if [ -z "${REVISION_PRERELEASE}" ] ; then
 	# components
 	[ ${DOTS} -ge 2 ] && RE_MINOR_SELECTOR+="${RE_MINOR}+"
 
+	# These track whether the "latest" revisions have already been
+	# added, so they're only added once regardless of how many
+	# registries we examine below
+	LATEST_ADDED="false"
+	LATEST_MINOR_ADDED="false"
+	LATEST_MAJOR_ADDED="false"
+
 	# Now let's figure out where this specific build version fits
 	# with respect to all the others. This needs to be done twice
 	# because the public versions may differ from the private ones
@@ -317,10 +341,6 @@ if [ -z "${REVISION_PRERELEASE}" ] ; then
 		# Ok, now let's see which level(s) of "latest" this version
 		# is within this specific scope
 		for V in FULL MAJOR MINOR ; do
-			LATEST_ADDED="false"
-			LATEST_MINOR_ADDED="false"
-			LATEST_MAJOR_ADDED="false"
-
 			case "${V}" in
 
 				FULL )
@@ -432,8 +452,7 @@ RC=0
 	set -x
 	exec docker build --file "${DOCKERFILE}" "${BUILD_ARGS[@]}" --tag "${AUTHORITATIVE_TAG}" .
 ) || RC=${?}
-find "${SECRETS_DIR}" -type f -exec shred -u "{}" ";" || true
-rm -rf "${SECRETS_DIR}" || true
+cleanup_secrets
 [ ${RC} -eq 0 ] || exit ${RC}
 
 # Once the build succeeds, we create the required tags as appropriate
@@ -461,7 +480,7 @@ if ! is_local_dev ; then
 fi
 
 REPORT_TARGET_PATH="${IMAGE_URI}/${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}/b${GITHUB_RUN_NUMBER}-${TIMESTAMP}"
-[ -n "${REVISION_METADATA}" ] && REPORT_TARGET_PATH+="+${REVISION_METADATA}"
+[ -n "${REVISION_METADATA}" ] && REPORT_TARGET_PATH+="+${REVISION_METADATA#-}"
 to_env REPORT_TARGET_PATH
 
 ARTIFACT_IDENTIFIER=""

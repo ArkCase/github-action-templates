@@ -29,7 +29,7 @@ for BUILD in "${BUILDS[@]}" ; do
 done
 
 if [ "${GET_DIGEST}" == "true" ] ; then
-	REPO_DIGEST="$(docker inspect --format="{{ index .RepoDigests 0 }}" "${AUTHORITATIVE_TAG}" 2>&1)" || fail "Failed to retrieve the digest for the image as [${AUTHORITATIVE_TAG}] (rc=${?}): ${DIGEST}"
+	REPO_DIGEST="$(docker inspect --format="{{ index .RepoDigests 0 }}" "${AUTHORITATIVE_TAG}" 2>&1)" || fail "Failed to retrieve the digest for the image as [${AUTHORITATIVE_TAG}] (rc=${?}): ${REPO_DIGEST}"
 	IMAGE_DIGEST="${REPO_DIGEST#*@}"
 	ok "\tThe image was published with the digest ${IMAGE_DIGEST}"
 else
