@@ -1,6 +1,10 @@
 #!/bin/bash
 . "${GITHUB_ACTION_PATH}/common.sh"
 
+# Make sure no symlinks take the publication target outside of the GH Pages checkout
+ensure_inside "${TGT_REPO_DIR}" "${CHART_TGT_DIR}" "public directory"
+ensure_inside "${TGT_REPO_DIR}" "${CHART_TGT_DIR}/${CHART_TGT_FILE}" "chart package"
+
 if [ -e "${CHART_TGT_DIR}/${CHART_TGT_FILE}" ] ; then
 	# The tag must survive this failure, since it's for an existing release
 	to_env DELETE_TAG="false"

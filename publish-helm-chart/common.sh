@@ -72,6 +72,30 @@ quit()
 	exit 0
 }
 
+#
+# usage: ensure_inside ROOT PATH LABEL
+#
+# Fail unless PATH, once all its symlinks are resolved, is either ROOT
+# itself or lies within it (ROOT is resolved the same way). Paths that
+# don't exist yet are resolved as far as they exist, and normalized
+# lexically from there on.
+#
+ensure_inside()
+{
+	local ROOT="${1}"
+	local TARGET="${2}"
+	local LABEL="${3}"
+	local REAL_ROOT=""
+	local REAL_TARGET=""
+
+	REAL_ROOT="$(realpath -m "${ROOT}" 2>&1)" || fail "Failed to resolve the path [${ROOT}] (rc=${?}): ${REAL_ROOT}"
+	REAL_TARGET="$(realpath -m "${TARGET}" 2>&1)" || fail "Failed to resolve the ${LABEL} [${TARGET}] (rc=${?}): ${REAL_TARGET}"
+	case "${REAL_TARGET}" in
+		"${REAL_ROOT}" | "${REAL_ROOT}/"* ) return 0 ;;
+	esac
+	fail "The ${LABEL} [${TARGET}] resolves to [${REAL_TARGET}], which is outside of [${ROOT}]"
+}
+
 has_value()
 {
 	local DECL="${1}"

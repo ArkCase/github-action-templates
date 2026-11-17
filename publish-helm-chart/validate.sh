@@ -52,6 +52,12 @@ CHART_TGT_DIR="${TGT_REPO_DIR}/${PUBLIC_DIR}"
 CHART_TGT_FILE="${CHART_NAME}-${VERSION}.tgz"
 DOC_SRC_DIR="${SRC_REPO_DIR}/${DOC_DIR}"
 
+# Make sure no symlinks take any of these outside of the sources checkout.
+# The target paths are checked once the GH Pages branch is checked out.
+ensure_inside "${SRC_REPO_DIR}" "${CHART_SRC_DIR}" "chart directory"
+ensure_inside "${SRC_REPO_DIR}" "${CHART_SRC_DIR}/${CHART_NAME}" "chart [${CHART_NAME}]"
+ensure_inside "${SRC_REPO_DIR}" "${DOC_SRC_DIR}" "documentation directory"
+
 # Export all the computed variables in their exact current values
 ok "All parameters appear to be valid"
 for VAR in CHART_NAME RELEASE_TYPE VERSION MAJOR MINOR PATCH PRE_RELEASE BUILD_METADATA CHART_SRC_DIR CHART_TGT_DIR CHART_TGT_FILE DOC_SRC_DIR ; do
