@@ -266,6 +266,11 @@ jobs:
           mvn-get-username: ${{ secrets.MVN_GET_USERNAME }}
           mvn-get-password: ${{ secrets.MVN_GET_PASSWORD }}
 
+          # For general GitLab authentication
+          gitlab-hostname: ${{ secrets.GITLAB_HOSTNAME }}
+          gitlab-username: ${{ secrets.GITLAB_USERNAME }}
+          gitlab-password: ${{ secrets.GITLAB_PASSWORD }}
+
           # For general Ubuntu Pro authentication
           ubuntu-pro-token: ${{ secrets.UBUNTU_PRO_TOKEN }}
 
