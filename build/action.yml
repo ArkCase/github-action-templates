@@ -104,6 +104,24 @@ inputs:
     type: string
     default: ""
 
+  gitlab-hostname:
+    description: "The hostname (and optional port) for GitLab checkouts"
+    required: false
+    type: string
+    default: ""
+
+  gitlab-username:
+    description: "The username to authenticate with for GitLab checkouts"
+    required: false
+    type: string
+    default: ""
+
+  gitlab-password:
+    description: "The password to authenticate with for GitLab checkouts"
+    required: false
+    type: string
+    default: ""
+
   ubuntu-pro-token:
     description: "The Ubuntu Pro token to be used when building using those features"
     required: false
@@ -317,6 +335,9 @@ runs:
         MVN_GET_ENCRYPTION_KEY: ${{ inputs.mvn-get-encryption-key }}
         MVN_GET_USERNAME: ${{ inputs.mvn-get-username }}
         MVN_GET_PASSWORD: ${{ inputs.mvn-get-password }}
+        GITLAB_HOSTNAME: ${{ inputs.gitlab-hostname }}
+        GITLAB_USERNAME: ${{ inputs.gitlab-username }}
+        GITLAB_PASSWORD: ${{ inputs.gitlab-password }}
         SCAN_COMP: ${{ inputs.compliance-scan }}
         SCAN_VULN: ${{ inputs.vulnerabilities-scan }}
       shell: bash
@@ -379,7 +400,7 @@ runs:
       if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
       shell: bash
       run: |
-        "${GITHUB_ACTION_PATH}/upload-reports.sh" 
+        "${GITHUB_ACTION_PATH}/upload-reports.sh"
 
     - name: Upload the vulnerabilities reports to the GitHub Artifacts tab
       if: ${{ (env.LOCAL_DEV != 'true') && (hashFiles(env.VULN_REPORT_JSON_SOURCE) != '') }}
@@ -405,7 +426,7 @@ runs:
       if: ${{ hashFiles(env.VULN_REPORT_JSON_SOURCE) != '' }}
       shell: bash
       run: |
-        "${GITHUB_ACTION_PATH}/upload-reports.sh" 
+        "${GITHUB_ACTION_PATH}/upload-reports.sh"
 
     - name: Rebuild adding the scan results
       if: ${{ (hashFiles(env.VULN_REPORT_JSON_SOURCE) != '') || (hashFiles(env.COMP_REPORT_XML_SOURCE) != '') }}
