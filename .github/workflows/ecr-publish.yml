@@ -71,6 +71,12 @@ on:
         type: number
         default: 30
 
+      large-runner:
+        description: "Whether or not to use a larger runner (default false)"
+        required: false
+        type: boolean
+        default: false
+
     secrets:
       #
       # For AWS/S3 access
@@ -132,6 +138,38 @@ on:
       UBUNTU_PRO_TOKEN:
         required: false
 
+    outputs:
+      authoritative_tag:
+        description: "The authoritative tag with which the built image can be retrieved"
+        value: ${{ jobs.Build-and-Publish.outputs.authoritative_tag }}
+      private_registry:
+        description: "The private registry onto which the built image was pushed"
+        value: ${{ jobs.Build-and-Publish.outputs.private_registry }}
+      public_registry:
+        description: "The public registry onto which the built image was pushed (will be the same as the private registry for private images)"
+        value: ${{ jobs.Build-and-Publish.outputs.public_registry }}
+      image_uri:
+        description: "The URI (without registry or version tag) for the built image"
+        value: ${{ jobs.Build-and-Publish.outputs.image_uri }}
+      image_tag:
+        description: "The exact tag used to push the built image, with all prefixes and suffixes"
+        value: ${{ jobs.Build-and-Publish.outputs.image_tag }}
+      image_digest:
+        description: "The exact digest for the built image"
+        value: ${{ jobs.Build-and-Publish.outputs.image_digest }}
+      revision_prefix:
+        description: "Any prefix present in the 'image_tag'"
+        value: ${{ jobs.Build-and-Publish.outputs.revision_prefix }}
+      revision:
+        description: "The base revision number, without any prefixes, suffixes, or extra data"
+        value: ${{ jobs.Build-and-Publish.outputs.revision }}
+      revision_prerelease:
+        description: "The prerelease information from the computed revision"
+        value: ${{ jobs.Build-and-Publish.outputs.revision_prerelease }}
+      revision_metadata:
+        description: "The metadata information from the computed revision"
+        value: ${{ jobs.Build-and-Publish.outputs.revision_metadata }}
+
 env:
   GH_TOKEN: ${{ github.token }}
 
@@ -152,22 +190,24 @@ jobs:
 
       - id: compute-matrix
         name: Compute alternate revisions and variants to be built
-        uses: arkcase/github-action-templates/compute-matrix@main
+        uses: arkcase/github-action-templates/compute-matrix@develop
         with:
           revision: ${{ inputs.revision }}
           portal: ${{ inputs.portal }}
+          large-runner: ${{ inputs.large-runner }}
           variants: ${{ inputs.variants }}
 
     outputs:
       revisions: ${{ steps.compute-matrix.outputs.revisions }}
       variants: ${{ steps.compute-matrix.outputs.variants }}
+      runner-tags: ${{ steps.compute-matrix.outputs.runner-tags }}
 
   #
   # Once we've figured out which builds we need to run, we run them!
   #
   Build-and-Publish:
     needs: [ "Compute-Revisions" ]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04${{ fromJSON(needs.Compute-Revisions.outputs.runner-tags)[0] }}
 
     strategy:
       max-parallel: 3
@@ -176,14 +216,28 @@ jobs:
         revision: ${{ fromJSON(needs.Compute-Revisions.outputs.revisions) }}
         variant: ${{ fromJSON(needs.Compute-Revisions.outputs.variants) }}
 
+    outputs:
+      authoritative_tag: ${{ steps.build_image.outputs.authoritative_tag }}
+      private_registry: ${{ steps.build_image.outputs.private_registry }}
+      public_registry: ${{ steps.build_image.outputs.public_registry }}
+      image_uri: ${{ steps.build_image.outputs.image_uri }}
+      image_tag: ${{ steps.build_image.outputs.image_tag }}
+      image_digest: ${{ steps.build_image.outputs.image_digest }}
+      revision_prefix: ${{ steps.build_image.outputs.revision_prefix }}
+      revision: ${{ steps.build_image.outputs.revision }}
+      revision_prerelease: ${{ steps.build_image.outputs.revision_prerelease }}
+      revision_metadata: ${{ steps.build_image.outputs.revision_metadata }}
+
     steps:
       # This is inefficient, but necessary b/c we may not share
       # the worker with the matrix computation actions, above
       - name: Checkout source code
+        id: checkout_source
         uses: actions/checkout@v6
 
       - name: Build the Container Image
-        uses: arkcase/github-action-templates/build@main
+        id: build_image
+        uses: arkcase/github-action-templates/build@develop
         with:
           # General build parameters
           matrix-revision: ${{ matrix.revision }}
@@ -217,6 +271,11 @@ jobs:
           mvn-get-encryption-key: ${{ secrets.MVN_GET_ENCRYPTION_KEY }}
           mvn-get-username: ${{ secrets.MVN_GET_USERNAME }}
           mvn-get-password: ${{ secrets.MVN_GET_PASSWORD }}
+
+          # For general GitLab authentication
+          gitlab-hostname: ${{ secrets.GITLAB_HOSTNAME }}
+          gitlab-username: ${{ secrets.GITLAB_USERNAME }}
+          gitlab-password: ${{ secrets.GITLAB_PASSWORD }}
 
           # For general Ubuntu Pro authentication
           ubuntu-pro-token: ${{ secrets.UBUNTU_PRO_TOKEN }}

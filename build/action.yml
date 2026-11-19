@@ -104,6 +104,24 @@ inputs:
     type: string
     default: ""
 
+  gitlab-hostname:
+    description: "The hostname (and optional port) for GitLab checkouts"
+    required: false
+    type: string
+    default: ""
+
+  gitlab-username:
+    description: "The username to authenticate with for GitLab checkouts"
+    required: false
+    type: string
+    default: ""
+
+  gitlab-password:
+    description: "The password to authenticate with for GitLab checkouts"
+    required: false
+    type: string
+    default: ""
+
   ubuntu-pro-token:
     description: "The Ubuntu Pro token to be used when building using those features"
     required: false
@@ -154,6 +172,38 @@ inputs:
     description: "The number of days to keep SNAPSHOT builds for"
     required: false
     type: number
+
+outputs:
+  authoritative_tag:
+    description: "The authoritative tag with which the built image can be retrieved"
+    value: ${{ steps.produce-outputs.outputs.authoritative_tag }}
+  private_registry:
+    description: "The private registry onto which the built image was pushed"
+    value: ${{ steps.produce-outputs.outputs.private_registry }}
+  public_registry:
+    description: "The public registry onto which the built image was pushed (will be the same as the private registry for private images)"
+    value: ${{ steps.produce-outputs.outputs.public_registry }}
+  image_uri:
+    description: "The URI (without registry or version tag) for the built image"
+    value: ${{ steps.produce-outputs.outputs.image_uri }}
+  image_tag:
+    description: "The exact tag used to push the built image, with all prefixes and suffixes"
+    value: ${{ steps.produce-outputs.outputs.image_tag }}
+  image_digest:
+    description: "The exact digest for the built image"
+    value: ${{ steps.produce-outputs.outputs.image_digest }}
+  revision_prefix:
+    description: "Any prefix present in the 'image_tag'"
+    value: ${{ steps.produce-outputs.outputs.revision_prefix }}
+  revision:
+    description: "The base revision number, without any prefixes, suffixes, or extra data"
+    value: ${{ steps.produce-outputs.outputs.revision }}
+  revision_prerelease:
+    description: "The prerelease information from the computed revision"
+    value: ${{ steps.produce-outputs.outputs.revision_prerelease }}
+  revision_metadata:
+    description: "The metadata information from the computed revision"
+    value: ${{ steps.produce-outputs.outputs.revision_metadata }}
 
 runs:
   using: composite
@@ -268,6 +318,12 @@ runs:
       shell: bash
       run: df -kh
 
+    - name: Enable Ubuntu Pro Features (only if necessary)
+      if: ${{ (inputs.ubuntu-pro-token != '') && (env.UBUNTU_PRO_REQUIRED == 'true') }}
+      uses: arkcase/github-action-templates/ubuntu-pro-attach@develop
+      with:
+        ubuntu-pro-token: ${{ inputs.ubuntu-pro-token }}
+
     - name: Build the Docker image
       env:
         ECR_AWS_REGION: ${{ inputs.aws-region }}
@@ -279,7 +335,9 @@ runs:
         MVN_GET_ENCRYPTION_KEY: ${{ inputs.mvn-get-encryption-key }}
         MVN_GET_USERNAME: ${{ inputs.mvn-get-username }}
         MVN_GET_PASSWORD: ${{ inputs.mvn-get-password }}
-        UBUNTU_PRO_TOKEN: ${{ inputs.ubuntu-pro-token }}
+        GITLAB_HOSTNAME: ${{ inputs.gitlab-hostname }}
+        GITLAB_USERNAME: ${{ inputs.gitlab-username }}
+        GITLAB_PASSWORD: ${{ inputs.gitlab-password }}
         SCAN_COMP: ${{ inputs.compliance-scan }}
         SCAN_VULN: ${{ inputs.vulnerabilities-scan }}
       shell: bash
@@ -327,7 +385,7 @@ runs:
         retention-days: ${{ env.SCAN_REPORT_RETENTION_DAYS }}
 
     - name: Upload the STIG compliance report to the GitHub Security tab
-      if: ${{ (env.LOCAL_DEV != 'true') && (hashFiles(env.COMP_REPORT_XML_SOURCE) != '') }}
+      if: ${{ (env.LOCAL_DEV != 'true') && (hashFiles(env.COMP_REPORT_SARIF_SOURCE) != '') }}
       uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: ${{ env.COMP_REPORT_SARIF_SOURCE }}
@@ -342,7 +400,7 @@ runs:
       if: ${{ hashFiles(env.COMP_REPORT_XML_SOURCE) != '' }}
       shell: bash
       run: |
-        "${GITHUB_ACTION_PATH}/upload-reports.sh" 
+        "${GITHUB_ACTION_PATH}/upload-reports.sh"
 
     - name: Upload the vulnerabilities reports to the GitHub Artifacts tab
       if: ${{ (env.LOCAL_DEV != 'true') && (hashFiles(env.VULN_REPORT_JSON_SOURCE) != '') }}
@@ -368,7 +426,7 @@ runs:
       if: ${{ hashFiles(env.VULN_REPORT_JSON_SOURCE) != '' }}
       shell: bash
       run: |
-        "${GITHUB_ACTION_PATH}/upload-reports.sh" 
+        "${GITHUB_ACTION_PATH}/upload-reports.sh"
 
     - name: Rebuild adding the scan results
       if: ${{ (hashFiles(env.VULN_REPORT_JSON_SOURCE) != '') || (hashFiles(env.COMP_REPORT_XML_SOURCE) != '') }}
@@ -409,3 +467,23 @@ runs:
       shell: bash
       run: |
         "${GITHUB_ACTION_PATH}/push-git-tags.sh"
+
+    - name: Prepare any releasable artifacts
+      shell: bash
+      run: |
+        "${GITHUB_ACTION_PATH}/prepare-releasable-artifacts.sh"
+
+    - name: Create Release and Upload Artifact
+      uses: softprops/action-gh-release@v2
+      if: ${{ env.ARTIFACTS_PATH != '' }}
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      with:
+        files: |
+          artifacts/*
+
+    - id: produce-outputs
+      name: Produce the outputs
+      shell: bash
+      run: |
+        "${GITHUB_ACTION_PATH}/produce-outputs.sh"

@@ -21,7 +21,7 @@ timestamp()
 say()
 {
 	local SUFFIX=""
-	[ -v PARALLEL_ID ] && SUFFIX="|${!PARALLEL_ID}"
+	[ -v PARALLEL_ID ] && SUFFIX="|${PARALLEL_ID}"
 	echo -e "$(timestamp) [${$}${SUFFIX}]: ${@}"
 }
 
@@ -134,6 +134,7 @@ has_value()
 
 to_env()
 {
+	local VAR=""
 	local KEY=""
 	local VALUE=""
 	local DECL=""

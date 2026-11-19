@@ -28,16 +28,6 @@ invalid_variants()
 	exit 1
 }
 
-output_variants()
-{
-	#
-	# This should yield the required output
-	#
-	local VARS="${*}"
-	echo "value=$(echo -n "${VARS}" | csv_to_list | jq -Rcn '[inputs]')"
-	exit 0
-}
-
 #
 # If this variable is set, it's a CSV including all the variants
 # that should be built. It'll be up to the build if it knows what
@@ -64,7 +54,12 @@ if [ -n "${VARIANTS_OVERRIDE:-}" ] ; then
 	# If there are no invalids, this returns cleanly, otherwise it fails the build
 	invalid_variants "${INVALID[@]}"
 
-	output_variants "${VARIANTS[@]}" >> "${GITHUB_OUTPUT}"
+	# Spit out the specific list of variants the user
+	# wants to build, with no additional considerations
+	if [ ${#VARIANTS[@]} -gt 0 ] ; then
+		echo "value=$(jq -cn '$ARGS.positional' --args "${VARIANTS[@]}")" >> "${GITHUB_OUTPUT}"
+		exit ${?}
+	fi
 fi
 
 #
@@ -102,4 +97,6 @@ invalid_variants "${INVALID[@]}"
 #
 [ ${#VARIANTS[@]} -gt 0 ] || VARIANTS+=( "${MINIMUM_VARIANT}" )
 
-output_variants "${VARIANTS[@]}" >> "${GITHUB_OUTPUT}"
+# This should yield the required output
+echo "value=$(jq -cn '$ARGS.positional' --args "${VARIANTS[@]}")" >> "${GITHUB_OUTPUT}"
+exit ${?}

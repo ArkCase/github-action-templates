@@ -1,6 +1,12 @@
 #!/bin/bash
 . "${GITHUB_ACTION_PATH}/common.sh"
 
+if [ ! -v UBUNTU_PRO_ACTIVE ] ; then
+	"${GITHUB_ACTION_PATH}/is-ubuntu-pro-active.sh" \
+		&& UBUNTU_PRO_ACTIVE="true" \
+		|| UBUNTU_PRO_ACTIVE="false"
+fi
+
 WORK_DIR="$(readlink -f "${GITHUB_WORKSPACE:-.}")"
 
 # Set any build arguments with private values
@@ -31,26 +37,45 @@ for VAR in "${!BUILD_ARG_@}" ; do
 		PUBLIC_REGISTRY | \
 		BASE_VER_PFX | \
 		VER | \
-		PORTAL_VER ) fail "The build argument ${ARG} cannot be overridden by .bulid-arg/*" ;;
+		PORTAL_VER ) fail "The build argument ${ARG} cannot be overridden by .build-args/*" ;;
 	esac
 	BUILD_ARGS+=(--build-arg "${ARG}=${!VAR}")
 done
 
-SECRETS_DIR="$(mktemp -d --tmpdir="${WORK_DIR}" ".secrets-XXXXXX.tmp")"
-mkdir -p "${SECRETS_DIR}"
+cleanup_secrets()
+{
+	[ -n "${SECRETS_DIR:-}" ] && [ -d "${SECRETS_DIR}" ] || return 0
+	find "${SECRETS_DIR}" -type f -exec shred -u "{}" ";" &>/dev/null || true
+	rm -rf "${SECRETS_DIR}" &>/dev/null || true
+	return 0
+}
+
+cleanup()
+{
+	local RC="${?}"
+	cleanup_secrets
+	return "${RC}"
+}
+trap cleanup EXIT
+
+# The secrets must NOT live inside the build context (the workspace), lest
+# they be sent to the Docker daemon and picked up by any "COPY . ..."
+SECRETS_DIR="$(mktemp -d --tmpdir="${RUNNER_TEMP:-/tmp}" ".secrets-XXXXXX.tmp")"
 
 # Next, add all the stuff S3 will need to pull crap
 AWS_PROFILE="armedia-docker-build"
 AWS_CONF="${SECRETS_DIR}/aws_conf"
+BUILD_ARGS+=(--secret id=aws_conf,src="${AWS_CONF}")
 (
 	cat <<-EOF
 	[profile ${AWS_PROFILE}]
 	region=${ECR_AWS_REGION}
 	EOF
 ) > "${AWS_CONF}"
-BUILD_ARGS+=(--secret id=aws_conf,src="${AWS_CONF}")
+sha256sum "${AWS_CONF}"
 
 AWS_AUTH="${SECRETS_DIR}/aws_auth"
+BUILD_ARGS+=(--secret id=aws_auth,src="${AWS_AUTH}")
 (
 	cat <<-EOF
 	[${AWS_PROFILE}]
@@ -58,31 +83,72 @@ AWS_AUTH="${SECRETS_DIR}/aws_auth"
 	aws_secret_access_key=${ECR_AWS_SECRET_ACCESS_KEY}
 	EOF
 ) > "${AWS_AUTH}"
-BUILD_ARGS+=(--secret id=aws_auth,src="${AWS_AUTH}")
+sha256sum "${AWS_AUTH}"
 
 # Add the Curl authentication deetz
 CURL_SECRETS="${SECRETS_DIR}/curl"
+BUILD_ARGS+=(--secret id=curl_auth,src="${CURL_SECRETS}")
 for VAR in "${!CURL_@}" ; do
 	echo "export ${VAR}=${!VAR@Q}"
 done | sort > "${CURL_SECRETS}"
-BUILD_ARGS+=(--secret id=curl_auth,src="${CURL_SECRETS}")
 sha256sum "${CURL_SECRETS}"
 
 # Add the Maven authentication deetz
 MVN_GET_SECRETS="${SECRETS_DIR}/mvn-get"
+BUILD_ARGS+=(--secret id=mvn_get_auth,src="${MVN_GET_SECRETS}")
 for VAR in "${!MVN_GET_@}" ; do
 	echo "export ${VAR}=${!VAR@Q}"
 done | sort > "${MVN_GET_SECRETS}"
-BUILD_ARGS+=(--secret id=mvn_get_auth,src="${MVN_GET_SECRETS}")
 sha256sum "${MVN_GET_SECRETS}"
 
-# Add the Ubuntu Pro authentication deetz
 UBUNTU_PRO_SECRETS="${SECRETS_DIR}/ubuntu-pro"
-for VAR in "${!UBUNTU_PRO_@}" ; do
-	echo "export ${VAR}=${!VAR@Q}"
-done | sort > "${UBUNTU_PRO_SECRETS}"
 BUILD_ARGS+=(--secret id=ubuntu_pro_auth,src="${UBUNTU_PRO_SECRETS}")
+if [ "${UBUNTU_PRO_ACTIVE}" == "true" ] ; then
+	# Get a fresh build token!
+	JSON="$(sudo pro api u.pro.attach.guest.get_guest_token.v1)" || fail "Failed to get the Ubuntu Pro Guest Token (rc=${?})"
+	RESULT="$(jq -r ".result" <<< "${JSON}" 2>&1)" || fail "The JSON reply could not be parsed (rc=${?}): ${RESULT}\n\nJSON: ${JSON}"
+	case "${RESULT}" in
+		success ) ;;
+
+		* )
+			ERRORS="$(jq -r ".errors[]?" <<< "${JSON}")"
+			err "API result = [${RESULT}]"
+			[ -n "${ERRORS}" ] && err "Errors:\n${ERRORS}"
+			fail "Failed to get the Ubuntu Pro Guest Token"
+			;;
+	esac
+
+	TOKEN="$(jq -r ".data.attributes.guest_token // empty" <<< "${JSON}")"
+	[ -n "${TOKEN}" ] && ok "Guest token ready!" || fail "No guest token was generated!"
+
+	WARNINGS="$(jq -r ".warnings[]?" <<< "${JSON}")"
+	[ -n "${WARNINGS}" ] && warn "Warnings:\n${WARNINGS}"
+
+	EXPIRATION="$(jq -r ".data.attributes.expires // empty" <<< "${JSON}")"
+	[ -n "${EXPIRATION}" ] && eyes "Token expiration date: ${EXPIRATION}" || warn "No expiration date given for the token"
+
+	ID="$(jq -r ".data.attributes.id // empty" <<< "${JSON}")"
+	[ -n "${ID}" ] && doing "Token ID: [${ID}]" || warn "No ID given for the token"
+
+	(
+		# We override the provided token with our own
+		export UBUNTU_PRO_TOKEN="${TOKEN}"
+		for VAR in "${!UBUNTU_PRO_@}" ; do
+			echo "export ${VAR}=${!VAR@Q}"
+		done
+	) | sort > "${UBUNTU_PRO_SECRETS}"
+
+	BUILD_ARGS+=(--label "UBUNTU_PRO=true")
+else
+	# No Ubuntu Pro? No problem! Use an empty file...
+	:> "${UBUNTU_PRO_SECRETS}"
+fi
 sha256sum "${UBUNTU_PRO_SECRETS}"
+
+[ -n "${FIPS}" ] \
+	&& FIPS_LABEL="true" \
+	|| FIPS_LABEL="false"
+BUILD_ARGS+=(--label "FIPS=${FIPS_LABEL}")
 
 # Final details for more complete information
 BUILD_ARGS+=(--label "GIT_REPOSITORY=${GITHUB_REPOSITORY}")
@@ -194,6 +260,13 @@ if [ -z "${REVISION_PRERELEASE}" ] ; then
 	# components
 	[ ${DOTS} -ge 2 ] && RE_MINOR_SELECTOR+="${RE_MINOR}+"
 
+	# These track whether the "latest" revisions have already been
+	# added, so they're only added once regardless of how many
+	# registries we examine below
+	LATEST_ADDED="false"
+	LATEST_MINOR_ADDED="false"
+	LATEST_MAJOR_ADDED="false"
+
 	# Now let's figure out where this specific build version fits
 	# with respect to all the others. This needs to be done twice
 	# because the public versions may differ from the private ones
@@ -268,10 +341,6 @@ if [ -z "${REVISION_PRERELEASE}" ] ; then
 		# Ok, now let's see which level(s) of "latest" this version
 		# is within this specific scope
 		for V in FULL MAJOR MINOR ; do
-			LATEST_ADDED="false"
-			LATEST_MINOR_ADDED="false"
-			LATEST_MAJOR_ADDED="false"
-
 			case "${V}" in
 
 				FULL )
@@ -356,6 +425,7 @@ to_env BUILDS="$(echo -n "${BUILDS[@]}" | tr ' ' ',')"
 # We do it like this to avoid having to modify the "docker push"
 # section, below.
 to_env AUTHORITATIVE_TAG="${PRIVATE_REGISTRY}/${IMAGE_URI}:${EXACT_REVISION}"
+to_env EXACT_REVISION
 
 RC=0
 (
@@ -368,8 +438,7 @@ RC=0
 	set -x
 	exec docker build --file "${DOCKERFILE}" "${BUILD_ARGS[@]}" --tag "${AUTHORITATIVE_TAG}" .
 ) || RC=${?}
-find "${SECRETS_DIR}" -type f -exec shred -u "{}" ";" || true
-rm -rf "${SECRETS_DIR}" || true
+cleanup_secrets
 [ ${RC} -eq 0 ] || exit ${RC}
 
 # Once the build succeeds, we create the required tags as appropriate
@@ -397,7 +466,7 @@ if ! is_local_dev ; then
 fi
 
 REPORT_TARGET_PATH="${IMAGE_URI}/${REVISION_PREFIX}${REVISION_BASE_NUMBER}${REVISION_PRERELEASE}/b${GITHUB_RUN_NUMBER}-${TIMESTAMP}"
-[ -n "${REVISION_METADATA}" ] && REPORT_TARGET_PATH+="+${REVISION_METADATA}"
+[ -n "${REVISION_METADATA}" ] && REPORT_TARGET_PATH+="+${REVISION_METADATA#-}"
 to_env REPORT_TARGET_PATH
 
 ARTIFACT_IDENTIFIER=""

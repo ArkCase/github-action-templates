@@ -7,7 +7,9 @@
 
 cleanup()
 {
-	docker volume rm "${SCAN_VOL}" &>/dev/null
+	local RC="${?}"
+	docker volume rm "${SCAN_VOL}" &>/dev/null || true
+	return "${RC}"
 }
 
 trap cleanup EXIT
@@ -37,4 +39,4 @@ CMD=(
 # being kept for posterity.
 #
 
-exec "${GITHUB_ACTION_PATH}/delete-existing-artifacts.sh"
+"${GITHUB_ACTION_PATH}/delete-existing-artifacts.sh"

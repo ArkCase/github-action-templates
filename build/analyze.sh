@@ -32,24 +32,29 @@ export RE_FULL_REVISION="^((0|[1-9][0-9]*)([.][0-9]+)*)(-([a-zA-Z0-9-]+([.][a-zA
 # Check to see the project's visibility
 #
 # TODO: CHECK THE DOCKERFILE FOR A REQUEST (ARG) TO KEEP THE BUILD PRIVATE?
+
+# By default, if we can't figure out if it's a private repo, assume it is for safety
 PRIVATE="$(gh repo view --json isPrivate --jq .isPrivate)" || PRIVATE="true"
-case "${PRIVATE,,}" in
-	false | true ) PRIVATE="${PRIVATE,,}" ;;
-	* ) PRIVATE="false" ;;
-esac
-export VISIBILITY="private"
-export FIPS=""
+[ "${PRIVATE,,}" == "false" ] \
+	&& PUBLIC="true" \
+	|| PUBLIC="false"
 
 #
 # The fips-enabled stuff is kept private
 #
+export FIPS=""
+export UBUNTU_PRO_REQUIRED="false"
 if [ "${VARIANT}" == "fips" ] ; then
 	FIPS="-fips"
-	PRIVATE="true"
+	PUBLIC="false"
+	UBUNTU_PRO_REQUIRED="true"
 fi
-"${PRIVATE}" || VISIBILITY="public"
 
-to_env VISIBILITY FIPS
+# Compute the final visibility
+export VISIBILITY="private"
+[ "${PUBLIC}" == "true" ] && VISIBILITY="public"
+
+to_env VISIBILITY FIPS UBUNTU_PRO_REQUIRED
 
 #
 # Split into an array of parts, making sure that double slashes, if present, are condensed into one
@@ -91,46 +96,46 @@ PUBLISH_MAJOR=""
 PUBLISH_MINOR=""
 
 #
-# If we weren't given a REVISION or a PORTAL_VER we want to "parse"
-# the Dockerfile and get the default values for any ARG declarations
-# since these will give us the default values we should use.
+# We always "parse" the Dockerfile to get the default values for any
+# ARG declarations, since these will give us the default values we
+# should use for whatever we weren't given explicitly (REVISION and
+# PORTAL_VER), as well as the PUBLISH_MAJOR and PUBLISH_MINOR flags
+# which can only come from the Dockerfile.
 #
-if [ -z "${REVISION}" ] || [ -z "${PORTAL_VER}" ] ; then
-	# Parse out the tag, handle the case when it's not there
-	VARS=( "VER" "PORTAL_VER" "PUBLISH_MAJOR" "PUBLISH_MINOR" )
-	RC=0
-	DOCKERFILE_ARG_DECLARATIONS="$( "${GITHUB_ACTION_PATH}/read-dockerfile-args.sh" "${VARS[@]}" < "${DOCKERFILE}" 2>&1)" || RC=${?}
-	if [ ${RC} -ne 0 ] ; then
-		say "Failed to compute the Dockerfile argument declarations (rc=${RC}): ${DOCKERFILE_ARG_DECLARATIONS}"
-		exit ${RC}
-	fi
-
-	# Declare the variables for consumption
-	while read DECLARATION ; do
-		[ -n "${DECLARATION}" ] && declare -xg "DOCKERFILE_${DECLARATION}"
-	done <<< "${DOCKERFILE_ARG_DECLARATIONS}"
-
-	# We only override the revision if it wasn't provided as a parameter
-	if [ -z "${REVISION}" ] ; then
-		[ -n "${DOCKERFILE_VER}" ] || fail "Failed to compute a build revision from the Dockerfile"
-		REVISION="${DOCKERFILE_VER}"
-	fi
-
-	# We only override the FOIA Portal version if it wasn't provided as a parameter
-	[ -z "${PORTAL_VER}" ] && PORTAL_VER="${DOCKERFILE_PORTAL_VER}"
-
-	# These two will allow us to produce tags using only the major version
-	# of the container, or the major-minor combo. This in turn allows
-	# references to the container based on this, which allows us to update
-	# software versions without requiring everyone to keep up perfectly
-	[ -z "${PUBLISH_MAJOR}" ] && PUBLISH_MAJOR="${DOCKERFILE_PUBLISH_MAJOR:-false}"
-	[ -z "${PUBLISH_MINOR}" ] && PUBLISH_MINOR="${DOCKERFILE_PUBLISH_MINOR:-false}"
-
-	say "Computed REVISION=${REVISION}"
-	say "Computed PORTAL_VER=${PORTAL_VER}"
-	say "Computed PUBLISH_MAJOR=${PUBLISH_MAJOR}"
-	say "Computed PUBLISH_MINOR=${PUBLISH_MINOR}"
+# Parse out the tag, handle the case when it's not there
+VARS=( "VER" "PORTAL_VER" "PUBLISH_MAJOR" "PUBLISH_MINOR" )
+RC=0
+DOCKERFILE_ARG_DECLARATIONS="$( "${GITHUB_ACTION_PATH}/read-dockerfile-args.sh" "${VARS[@]}" < "${DOCKERFILE}" 2>&1)" || RC=${?}
+if [ ${RC} -ne 0 ] ; then
+	say "Failed to compute the Dockerfile argument declarations (rc=${RC}): ${DOCKERFILE_ARG_DECLARATIONS}"
+	exit ${RC}
 fi
+
+# Declare the variables for consumption
+while read DECLARATION ; do
+	[ -n "${DECLARATION}" ] && declare -xg "DOCKERFILE_${DECLARATION}"
+done <<< "${DOCKERFILE_ARG_DECLARATIONS}"
+
+# We only override the revision if it wasn't provided as a parameter
+if [ -z "${REVISION}" ] ; then
+	[ -n "${DOCKERFILE_VER}" ] || fail "Failed to compute a build revision from the Dockerfile"
+	REVISION="${DOCKERFILE_VER}"
+fi
+
+# We only override the FOIA Portal version if it wasn't provided as a parameter
+[ -z "${PORTAL_VER}" ] && PORTAL_VER="${DOCKERFILE_PORTAL_VER}"
+
+# These two will allow us to produce tags using only the major version
+# of the container, or the major-minor combo. This in turn allows
+# references to the container based on this, which allows us to update
+# software versions without requiring everyone to keep up perfectly
+[ -z "${PUBLISH_MAJOR}" ] && PUBLISH_MAJOR="${DOCKERFILE_PUBLISH_MAJOR:-false}"
+[ -z "${PUBLISH_MINOR}" ] && PUBLISH_MINOR="${DOCKERFILE_PUBLISH_MINOR:-false}"
+
+say "Computed REVISION=${REVISION}"
+say "Computed PORTAL_VER=${PORTAL_VER}"
+say "Computed PUBLISH_MAJOR=${PUBLISH_MAJOR}"
+say "Computed PUBLISH_MINOR=${PUBLISH_MINOR}"
 
 #
 # Make sure these two have a valid boolean value
@@ -164,7 +169,7 @@ REVISION_METADATA="${BASH_REMATCH[8]}"
 #
 REVISION_SNAPSHOT="false"
 if [[ "${REVISION_PRERELEASE}" =~ SNAPSHOT ]] ; then
-	[[ "${REVISION_PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT ]] || fail "Illegal use of the word 'SNAPSHOT' as [${PRERELASE}] - must be the last word: [${REVISION}]"
+	[[ "${REVISION_PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT$ ]] || fail "Illegal use of the word 'SNAPSHOT' as [${REVISION_PRERELEASE}] - must be the last word: [${REVISION}]"
 	REVISION_SNAPSHOT="true"
 fi
 
@@ -181,7 +186,7 @@ if [ -n "${PORTAL_VER}" ] ; then
 	# If the pre-release info is a "SNAPSHOT", make sure it's used properly
 	PORTAL_SNAPSHOT="false"
 	if [[ "${PORTAL_PRERELEASE}" =~ SNAPSHOT ]] ; then
-		[[ "${PORTAL_PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT ]] || fail "Illegal use of the word 'SNAPSHOT' as [${PRERELASE}] - must be the last word: [${PORTAL_VER}]"
+		[[ "${PORTAL_PRERELEASE}" =~ (^|[^a-zA-Z0-9_])SNAPSHOT$ ]] || fail "Illegal use of the word 'SNAPSHOT' as [${PORTAL_PRERELEASE}] - must be the last word: [${PORTAL_VER}]"
 		PORTAL_SNAPSHOT="true"
 	fi
 
