@@ -101,6 +101,14 @@ for VAR in "${!MVN_GET_@}" ; do
 done | sort > "${MVN_GET_SECRETS}"
 sha256sum "${MVN_GET_SECRETS}"
 
+# Add the GitLab authentication deetz
+GITLAB_SECRETS="${SECRETS_DIR}/gitlab"
+BUILD_ARGS+=(--secret id=gitlab_auth,src="${GITLAB_SECRETS}")
+for VAR in "${!GITLAB_@}" ; do
+	echo "export ${VAR}=${!VAR@Q}"
+done | sort > "${GITLAB_SECRETS}"
+sha256sum "${GITLAB_SECRETS}"
+
 UBUNTU_PRO_SECRETS="${SECRETS_DIR}/ubuntu-pro"
 BUILD_ARGS+=(--secret id=ubuntu_pro_auth,src="${UBUNTU_PRO_SECRETS}")
 if [ "${UBUNTU_PRO_ACTIVE}" == "true" ] ; then
