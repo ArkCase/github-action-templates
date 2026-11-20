@@ -128,6 +128,16 @@ on:
         required: false
 
       #
+      # To check out private GitLab repositories
+      #
+      GITLAB_HOSTNAME:
+        required: false
+      GITLAB_USERNAME:
+        required: false
+      GITLAB_PASSWORD:
+        required: false
+
+      #
       # To build using Ubuntu Pro features
       #
       UBUNTU_PRO_TOKEN:
